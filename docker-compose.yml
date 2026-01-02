@@ -11,6 +11,8 @@ services:
       - ./database:/app/database
       # Монтируем папку для логов (если нужно)
       - ./logs:/app/logs
+    env_file:
+      - .env
     environment:
       # Flask порт
       - FLASK_APP=app.py
