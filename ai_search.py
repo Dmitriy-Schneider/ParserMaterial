@@ -98,9 +98,19 @@ class AISearch:
             except Exception as e:
                 print(f"Perplexity search error for '{grade_name}': {e}")
 
-        # Save to cache if found
+        # Validate result before caching
         if result:
-            self._save_to_cache(grade_name, result)
+            # Validate chemical composition
+            is_valid = self._validate_composition(result)
+            result['validated'] = is_valid
+
+            if not is_valid:
+                print(f"WARNING: AI result for '{grade_name}' failed validation - NOT CACHING")
+                result['validation_warning'] = "Chemical composition validation failed. Data may be inaccurate."
+            else:
+                # Only save to cache if validated
+                self._save_to_cache(grade_name, result)
+                print(f"✓ Result validated and cached for '{grade_name}'")
 
         return result
 
@@ -299,12 +309,97 @@ class AISearch:
             print(f"Error enhancing with PDF: {e}")
             return result
 
+    def _validate_composition(self, result: Dict[str, Any]) -> bool:
+        """
+        Validate chemical composition values
+
+        Args:
+            result: AI search result
+
+        Returns:
+            True if composition is valid, False otherwise
+        """
+        elements = ['c', 'cr', 'mo', 'v', 'w', 'co', 'ni', 'mn', 'si', 's', 'p', 'cu', 'nb', 'n']
+
+        for element in elements:
+            value = result.get(element)
+            if value is None or value == '':
+                continue
+
+            # Convert to string for validation
+            value_str = str(value).strip().lower()
+
+            # Skip if null/none/n/a
+            if value_str in ['null', 'none', 'n/a', '-']:
+                continue
+
+            try:
+                # Check if it's a range (e.g., "0.40-0.50")
+                if '-' in value_str:
+                    parts = value_str.replace(',', '.').split('-')
+                    if len(parts) == 2:
+                        min_val = float(parts[0].strip())
+                        max_val = float(parts[1].strip())
+
+                        # Validate ranges
+                        if min_val > max_val:
+                            print(f"Invalid range for {element}: {value} (min > max)")
+                            return False
+
+                        # Check reasonable limits
+                        if element == 'c' and (max_val > 5.0 or min_val < 0):
+                            print(f"Invalid carbon range: {value} (should be 0-5%)")
+                            return False
+
+                        if max_val > 100 or min_val < 0:
+                            print(f"Invalid {element} range: {value} (should be 0-100%)")
+                            return False
+                else:
+                    # Single value
+                    val = float(value_str.replace(',', '.'))
+
+                    # Check reasonable limits
+                    if element == 'c' and (val > 5.0 or val < 0):
+                        print(f"Invalid carbon: {value} (should be 0-5%)")
+                        return False
+
+                    if val > 100 or val < 0:
+                        print(f"Invalid {element}: {value} (should be 0-100%)")
+                        return False
+
+            except (ValueError, AttributeError) as e:
+                print(f"Cannot parse {element} value: {value}")
+                return False
+
+        return True
+
+    def _normalize_analogues(self, analogues: Any) -> str:
+        """
+        Normalize analogues field
+
+        Args:
+            analogues: Analogues value from AI
+
+        Returns:
+            Normalized string or indication that none found
+        """
+        if analogues is None or str(analogues).strip().lower() in ['none', 'null', 'n/a', '-', '']:
+            return "Аналоги не найдены (уникальная марка)"
+
+        return str(analogues).strip()
+
     def _create_prompt(self, grade_name: str) -> str:
         """Create prompt for OpenAI"""
         return f"""Find detailed information about steel grade "{grade_name}".
 
-IMPORTANT: If you find a PDF datasheet with this steel grade's information, include the PDF URL in the "pdf_url" field.
-Look for manufacturer datasheets (Bohler, Uddeholm, Voestalpine, etc.) that contain accurate chemical composition.
+CRITICAL INSTRUCTIONS:
+1. Search multiple reliable sources (manufacturer websites, MatWeb, steelnumber.com, etc.)
+2. If you find a PDF datasheet, include the URL in "pdf_url" field
+3. Cross-check chemical composition from at least 2 sources if possible
+4. NEVER invent or estimate values - only use data from verified sources
+5. For analogues, provide only confirmed equivalents from standards (AISI, DIN, JIS, etc.)
+6. If no analogues found, set analogues to null (NOT empty string)
+7. Chemical composition must be realistic (C: 0-5%, other elements: 0-100%)
 
 Provide the following information in JSON format:
 {{
@@ -366,6 +461,10 @@ CRITICAL: Only provide factual data from reliable sources. Never invent or estim
 
                 # Ensure grade name is set
                 data['grade'] = data.get('grade', grade_name)
+
+                # Normalize analogues
+                if 'analogues' in data:
+                    data['analogues'] = self._normalize_analogues(data['analogues'])
 
                 # Add metadata (ai_source will be set by caller)
                 data['ai_timestamp'] = datetime.now().isoformat()

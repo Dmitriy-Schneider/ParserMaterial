@@ -22,6 +22,21 @@ services:
     networks:
       - parser-steel-network
 
+  telegram-bot:
+    build:
+      context: ./telegram_bot
+      dockerfile: Dockerfile
+    container_name: parsersteel-telegram-bot
+    env_file:
+      - .env
+    environment:
+      - PARSERSTEEL_API_URL=http://steel-parser:5000
+    restart: unless-stopped
+    networks:
+      - parser-steel-network
+    depends_on:
+      - steel-parser
+
 networks:
   parser-steel-network:
     driver: bridge
