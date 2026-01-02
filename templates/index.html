@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Steel Grade Catalog</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #e3f2fd;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                border-radius: 10px;
+            }
+            
+            .header {
+                padding: 15px;
+            }
+            
+            .header h1 {
+                font-size: 1.5em;
+            }
+        }
+
+        .header {
+            background: #2196f3;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .filter-panel {
+            background: #f8f9fa;
+            padding: 25px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .filter-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        @media (max-width: 768px) {
+            .filter-row {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        
+        .btn-exact-search {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+            min-width: 40px;
+        }
+        
+        .btn-exact-search:hover {
+            background: #45a049;
+        }
+        
+        .btn-exact-search:active {
+            background: #3d8b40;
+        }
+        
+        .btn-clear-compact {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.3s;
+            min-width: 50px;
+        }
+        
+        .btn-clear-compact:hover {
+            background: #5a6268;
+        }
+        
+        .btn-clear-compact:active {
+            background: #495057;
+        }
+
+        .filter-group label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 60px;
+            font-size: 12px;
+        }
+
+        .filter-group input,
+        .filter-group select {
+            flex: 1;
+            padding: 6px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .filter-group input:focus,
+        .filter-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .element-filter {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .element-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .element-group label {
+            font-weight: 600;
+            color: #495057;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .element-group .input-row {
+            display: flex;
+            gap: 3px;
+        }
+
+        .element-group input {
+            flex: 1;
+            padding: 8px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 12px;
+            min-width: 0;
+            max-width: 60px;
+        }
+
+        @media (max-width: 1200px) {
+            .element-filter {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .element-filter {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            
+            .filter-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .table-container {
+                max-height: 400px;
+            }
+            
+            th, td {
+                font-size: 10px;
+                padding: 6px 4px;
+            }
+        }
+
+
+        .table-container {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 600px;
+            position: relative;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        @media (max-width: 768px) {
+            .table-container {
+                max-height: 400px;
+                overflow-x: scroll;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .filter-panel {
+                padding: 15px;
+            }
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        th {
+            background: #2196f3;
+            color: white;
+            padding: 15px 10px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            white-space: nowrap;
+            font-size: 12px;
+        }
+
+        td {
+            padding: 8px 6px;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 11px;
+            white-space: nowrap;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .grade-link {
+            color: #2196f3;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+        
+        .grade-link:hover {
+            color: #1976d2;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+            color: #667eea;
+        }
+
+        .stats {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 15px;
+            padding: 8px 12px;
+            background: rgba(33, 150, 243, 0.9);
+            border-radius: 6px;
+            color: white;
+            font-size: 11px;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-item span {
+            display: block;
+            font-size: 12px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .stat-item label {
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 Steel Grade Catalog</h1>
+            <p>Interactive database of steel grades and compositions</p>
+        </div>
+
+        <div class="filter-panel">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label>Grade:</label>
+                    <input type="text" id="gradeFilter" placeholder="Enter steel grade">
+                    <button class="btn-exact-search" onclick="searchExact()" title="Exact search">🔍</button>
+                    <button class="btn-clear-compact" onclick="clearFilters()" title="Clear all filters">Clear</button>
+                </div>
+                <div class="filter-group">
+                    <label>Base:</label>
+                    <select id="baseFilter">
+                        <option value="">Any</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="element-filter">
+                <div class="element-group">
+                    <label>C</label>
+                    <div class="input-row">
+                        <input type="text" id="c_min" placeholder="min">
+                        <input type="text" id="c_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>Cr</label>
+                    <div class="input-row">
+                        <input type="text" id="cr_min" placeholder="min">
+                        <input type="text" id="cr_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>Mo</label>
+                    <div class="input-row">
+                        <input type="text" id="mo_min" placeholder="min">
+                        <input type="text" id="mo_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>V</label>
+                    <div class="input-row">
+                        <input type="text" id="v_min" placeholder="min">
+                        <input type="text" id="v_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>W</label>
+                    <div class="input-row">
+                        <input type="text" id="w_min" placeholder="min">
+                        <input type="text" id="w_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>Co</label>
+                    <div class="input-row">
+                        <input type="text" id="co_min" placeholder="min">
+                        <input type="text" id="co_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>Ni</label>
+                    <div class="input-row">
+                        <input type="text" id="ni_min" placeholder="min">
+                        <input type="text" id="ni_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>Mn</label>
+                    <div class="input-row">
+                        <input type="text" id="mn_min" placeholder="min">
+                        <input type="text" id="mn_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>Si</label>
+                    <div class="input-row">
+                        <input type="text" id="si_min" placeholder="min">
+                        <input type="text" id="si_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>S</label>
+                    <div class="input-row">
+                        <input type="text" id="s_min" placeholder="min">
+                        <input type="text" id="s_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>P</label>
+                    <div class="input-row">
+                        <input type="text" id="p_min" placeholder="min">
+                        <input type="text" id="p_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>Cu</label>
+                    <div class="input-row">
+                        <input type="text" id="cu_min" placeholder="min">
+                        <input type="text" id="cu_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>Nb</label>
+                    <div class="input-row">
+                        <input type="text" id="nb_min" placeholder="min">
+                        <input type="text" id="nb_max" placeholder="max">
+                    </div>
+                </div>
+                <div class="element-group">
+                    <label>N</label>
+                    <div class="input-row">
+                        <input type="text" id="n_min" placeholder="min">
+                        <input type="text" id="n_max" placeholder="max">
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="table-container">
+            <table id="steelTable">
+                <thead>
+                    <tr>
+                        <th style="min-width: 120px;">Grade</th>
+                        <th style="min-width: 250px;">Analogues</th>
+                        <th style="min-width: 50px;">Base</th>
+                        <th style="min-width: 70px;">C</th>
+                        <th style="min-width: 70px;">Cr</th>
+                        <th style="min-width: 70px;">Mo</th>
+                        <th style="min-width: 70px;">V</th>
+                        <th style="min-width: 70px;">W</th>
+                        <th style="min-width: 70px;">Co</th>
+                        <th style="min-width: 70px;">Ni</th>
+                        <th style="min-width: 70px;">Mn</th>
+                        <th style="min-width: 70px;">Si</th>
+                        <th style="min-width: 70px;">S</th>
+                        <th style="min-width: 70px;">P</th>
+                        <th style="min-width: 70px;">Cu</th>
+                        <th style="min-width: 70px;">Nb</th>
+                        <th style="min-width: 70px;">N</th>
+                        <th style="min-width: 100px;">Other Elements</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="18" class="loading">Loading data...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Load statistics on page load
+        fetch('/api/stats')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('totalCount').textContent = data.total;
+                // Populate dropdowns
+                data.bases.forEach(base => {
+                    const option = document.createElement('option');
+                    option.value = base;
+                    option.textContent = base;
+                    document.getElementById('baseFilter').appendChild(option);
+                });
+                // techFilter removed - no longer used
+            });
+
+        // Search function
+        function searchSteels(exactSearch = false) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '<tr><td colspan="20" class="loading">Searching...</td></tr>';
+
+            // Build query string
+            const params = new URLSearchParams();
+            
+            const grade = document.getElementById('gradeFilter').value;
+            if (grade) {
+                params.append('grade', grade);
+                if (exactSearch) {
+                    params.append('exact', 'true');
+                }
+            }
+            
+            const base = document.getElementById('baseFilter').value;
+            if (base) params.append('base', base);
+            
+            // techFilter removed - no longer used
+
+            // Add element filters
+            const elements = ['c', 'cr', 'mo', 'v', 'w', 'co', 'ni', 'mn', 'si', 's', 'p', 'cu', 'nb', 'n'];
+            elements.forEach(element => {
+                const minVal = document.getElementById(element + '_min').value;
+                const maxVal = document.getElementById(element + '_max').value;
+                if (minVal) params.append(`${element}_min`, minVal);
+                if (maxVal) params.append(`${element}_max`, maxVal);
+            });
+
+            fetch(`/api/steels?${params.toString()}`)
+                .then(response => response.json())
+                .then(data => {
+                    displaySteels(data);
+                    document.getElementById('resultCount').textContent = data.length;
+                })
+                .catch(error => {
+                    tbody.innerHTML = '<tr><td colspan="20">Error loading data</td></tr>';
+                });
+        }
+
+        // Display steel data
+        function displaySteels(steels) {
+            const tbody = document.getElementById('tableBody');
+            
+            if (steels.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="18">No results found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = steels.map(steel => {
+                let gradeCell = steel.grade || '';
+                if (steel.link) {
+                    gradeCell = `<a href="${steel.link}" target="_blank" class="grade-link">${steel.grade}</a>`;
+                }
+                
+                // Replace asterisks with spaces in analogues
+                let analoguesCell = (steel.analogues || '').replace(/\*/g, ' ');
+                
+                return `
+                <tr>
+                    <td>${gradeCell}</td>
+                    <td style="max-width: 300px; white-space: normal;">${analoguesCell}</td>
+                    <td>${steel.base || ''}</td>
+                    <td>${steel.c || ''}</td>
+                    <td>${steel.cr || ''}</td>
+                    <td>${steel.mo || ''}</td>
+                    <td>${steel.v || ''}</td>
+                    <td>${steel.w || ''}</td>
+                    <td>${steel.co || ''}</td>
+                    <td>${steel.ni || ''}</td>
+                    <td>${steel.mn || ''}</td>
+                    <td>${steel.si || ''}</td>
+                    <td>${steel.s || ''}</td>
+                    <td>${steel.p || ''}</td>
+                    <td>${steel.cu || ''}</td>
+                    <td>${steel.nb || ''}</td>
+                    <td>${steel.n || ''}</td>
+                    <td>${steel.other_elements || ''}</td>
+                </tr>
+            `;
+            }).join('');
+        }
+
+        // Exact search function
+        function searchExact() {
+            searchSteels(true);
+        }
+
+        // Clear all filters
+        function clearFilters() {
+            document.getElementById('gradeFilter').value = '';
+            document.getElementById('baseFilter').value = '';
+            // techFilter removed - no longer used
+            
+            const elements = ['c', 'cr', 'mo', 'v', 'w', 'co', 'ni', 'mn', 'si', 's', 'p', 'cu', 'nb', 'n'];
+            elements.forEach(element => {
+                document.getElementById(element + '_min').value = '';
+                document.getElementById(element + '_max').value = '';
+            });
+            
+            searchSteels();
+        }
+
+        // Auto-search on input (debounced)
+        let searchTimeout;
+        document.querySelectorAll('input, select').forEach(input => {
+            input.addEventListener('input', () => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(searchSteels, 1500);
+            });
+        });
+
+        // Initial load
+        searchSteels();
+    </script>
+
+    <!-- Fixed stats in corner -->
+    <div class="stats">
+        <div class="stat-item">
+            <span id="totalCount">0</span>
+            <label>Total</label>
+        </div>
+        <div class="stat-item">
+            <span id="resultCount">0</span>
+            <label>Found</label>
+        </div>
+    </div>
+</body>
+</html>
+

@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  steel-parser:
+    build: .
+    container_name: parser-steel-app
+    ports:
+      - "5001:5000"
+    volumes:
+      # Монтируем папку с базой данных для сохранения данных
+      - ./database:/app/database
+      # Монтируем папку для логов (если нужно)
+      - ./logs:/app/logs
+    environment:
+      # Flask порт
+      - FLASK_APP=app.py
+      - FLASK_ENV=production
+      - FLASK_PORT=5000
+    restart: unless-stopped
+    networks:
+      - parser-steel-network
+
+networks:
+  parser-steel-network:
+    driver: bridge
+

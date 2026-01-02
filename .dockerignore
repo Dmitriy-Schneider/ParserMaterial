@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# Flask
+instance/
+.webassets-cache
+*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Другие временные файлы
+*.tmp
+*.bak
+*.swp
+html_analysis/
+rendered_page.html
+
+# Исключаем файлы, которые не нужны в контейнере
+*.md
+!README.md
+
+# Исключаем CSV файлы (можно добавить если нужны)
+*.csv
+
+# Исключаем базу данных (будет создана в контейнере)
+# database/*.db
+# Но НЕ исключаем саму папку database, чтобы сохранять данные
+
+
+
+
+
+
