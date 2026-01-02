@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: parsersteel-telegram-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PARSERSTEEL_API_URL=${PARSERSTEEL_API_URL:-http://parsersteel-api:5001}
+    networks:
+      - parsersteel-network
+    depends_on:
+      - parsersteel-api
+
+  parsersteel-api:
+    image: parsersteel-app:latest
+    container_name: parsersteel-api
+    restart: unless-stopped
+    ports:
+      - "5001:5000"
+    env_file:
+      - ../.env
+    volumes:
+      - ../database:/app/database
+      - ../logs:/app/logs
+    networks:
+      - parsersteel-network
+
+networks:
+  parsersteel-network:
+    driver: bridge

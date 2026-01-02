@@ -33,6 +33,8 @@ def create_database():
             nb TEXT,
             n TEXT,
             tech TEXT,
+            standard TEXT,
+            manufacturer TEXT,
             link TEXT,
             UNIQUE(grade, link)
         )
@@ -57,6 +59,43 @@ def get_connection():
     return sqlite3.connect(config.DB_FILE)
 
 
+def migrate_database():
+    """Migrate existing database to add new columns"""
+    conn = sqlite3.connect(config.DB_FILE)
+    cursor = conn.cursor()
+
+    try:
+        # Check if standard column exists
+        cursor.execute("PRAGMA table_info(steel_grades)")
+        columns = [col[1] for col in cursor.fetchall()]
+
+        # Add standard column if missing
+        if 'standard' not in columns:
+            print("Adding 'standard' column...")
+            cursor.execute("ALTER TABLE steel_grades ADD COLUMN standard TEXT")
+            conn.commit()
+            print("✓ Added 'standard' column")
+
+        # Add manufacturer column if missing
+        if 'manufacturer' not in columns:
+            print("Adding 'manufacturer' column...")
+            cursor.execute("ALTER TABLE steel_grades ADD COLUMN manufacturer TEXT")
+            conn.commit()
+            print("✓ Added 'manufacturer' column")
+
+    except Exception as e:
+        print(f"Migration error: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+    print("Migration completed!")
+
+
 if __name__ == "__main__":
-    create_database()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--migrate":
+        migrate_database()
+    else:
+        create_database()
 
