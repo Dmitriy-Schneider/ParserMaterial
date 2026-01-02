@@ -2,10 +2,18 @@ from flask import Flask, render_template, jsonify, request
 import sqlite3
 import json
 import os
+from dotenv import load_dotenv
 import config
 from database_schema import get_connection
+from ai_search import get_ai_search
+
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
+
+# Initialize AI search
+ai_search = get_ai_search()
 
 
 @app.route('/')
@@ -16,15 +24,16 @@ def index():
 
 @app.route('/api/steels', methods=['GET'])
 def get_steels():
-    """Get steel grades with optional filtering"""
+    """Get steel grades with optional filtering and AI fallback"""
     # Check if database exists
     if not os.path.exists(config.DB_FILE):
         return jsonify({'error': 'Database not found. Please run parser.py first.'}), 500
-    
+
     # Get filter parameters
     grade_filter = request.args.get('grade', '').strip()
     exact_search = request.args.get('exact', 'false').lower() == 'true'
     base_filter = request.args.get('base', '').strip()
+    use_ai = request.args.get('ai', 'true').lower() == 'true'
     # tech_filter removed - no longer used
     
     # Element filters
@@ -101,11 +110,20 @@ def get_steels():
         cursor.execute(query, params)
         columns = [description[0] for description in cursor.description]
         rows = cursor.fetchall()
-        
+
         results = []
         for row in rows:
             results.append(dict(zip(columns, row)))
-        
+
+        # If no results and AI is enabled, try AI search
+        if len(results) == 0 and grade_filter and use_ai and ai_search.enabled:
+            ai_result = ai_search.search_steel(grade_filter)
+            if ai_result:
+                # Format AI result to match database schema
+                ai_result['id'] = 'AI'
+                ai_result['link'] = None
+                results = [ai_result]
+
         return jsonify(results)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -113,28 +131,81 @@ def get_steels():
         conn.close()
 
 
+@app.route('/api/steels/ai-search', methods=['GET', 'POST'])
+def ai_search_endpoint():
+    """Direct AI search endpoint for steel grades"""
+    if not ai_search.enabled:
+        return jsonify({
+            'error': 'AI search is not enabled. Please set OPENAI_API_KEY in .env file'
+        }), 503
+
+    # Get grade name from query parameter or JSON body
+    if request.method == 'GET':
+        grade_name = request.args.get('grade', '').strip()
+    else:
+        data = request.get_json() or {}
+        grade_name = data.get('grade', '').strip()
+
+    if not grade_name:
+        return jsonify({'error': 'Grade name is required'}), 400
+
+    try:
+        result = ai_search.search_steel(grade_name)
+
+        if result:
+            return jsonify({
+                'success': True,
+                'grade': grade_name,
+                'data': result,
+                'source': 'ai',
+                'cached': result.get('cached', False)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'grade': grade_name,
+                'message': 'Steel grade not found by AI',
+                'source': 'ai'
+            }), 404
+
+    except Exception as e:
+        return jsonify({
+            'error': f'AI search failed: {str(e)}'
+        }), 500
+
+
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """Get statistics about the database"""
     if not os.path.exists(config.DB_FILE):
         return jsonify({'error': 'Database not found. Please run parser.py first.'}), 500
-    
+
     conn = get_connection()
     cursor = conn.cursor()
-    
+
     try:
         cursor.execute("SELECT COUNT(*) FROM steel_grades")
         total = cursor.fetchone()[0]
-        
+
         # Get unique values for dropdowns
         cursor.execute("SELECT DISTINCT base FROM steel_grades WHERE base IS NOT NULL")
         bases = [row[0] for row in cursor.fetchall()]
-        
+
+        # Check AI cache stats
+        ai_cached = 0
+        try:
+            cursor.execute("SELECT COUNT(*) FROM ai_searches")
+            ai_cached = cursor.fetchone()[0]
+        except:
+            pass
+
         # techs removed - no longer used
-        
+
         return jsonify({
             'total': total,
-            'bases': bases
+            'bases': bases,
+            'ai_enabled': ai_search.enabled,
+            'ai_cached_searches': ai_cached
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
