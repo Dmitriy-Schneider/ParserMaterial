@@ -6,9 +6,21 @@ Uses OpenAI GPT-4 to find information about steel grades not in the database
 import os
 import json
 import time
+import sys
+from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
 from database_schema import get_connection
+
+# Add utils directory to path
+sys.path.append(str(Path(__file__).parent / 'utils'))
+
+try:
+    from utils.pdf_parser import PDFParser, find_pdf_urls_in_text
+    PDF_PARSER_AVAILABLE = True
+except ImportError:
+    PDF_PARSER_AVAILABLE = False
+    print("WARNING: PDF parser not available. Install pdfplumber: pip install pdfplumber PyPDF2")
 
 
 class AISearch:
@@ -41,6 +53,9 @@ class AISearch:
             print("WARNING: No AI API keys found. AI search will be disabled.")
             print("Set OPENAI_API_KEY or PERPLEXITY_API_KEY in .env file")
             self.enabled = False
+
+        # Initialize PDF parser
+        self.pdf_parser = PDFParser() if PDF_PARSER_AVAILABLE else None
 
     def search_steel(self, grade_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -197,6 +212,10 @@ class AISearch:
             # Extract JSON from response
             result = self._parse_ai_response(content, grade_name)
 
+            # Try to enhance with PDF data if available
+            if result and self.pdf_parser:
+                result = self._enhance_with_pdf(result, content, grade_name)
+
             return result
 
         except ImportError:
@@ -206,9 +225,86 @@ class AISearch:
             print(f"Perplexity API error: {e}")
             return None
 
+    def _enhance_with_pdf(self, result: Dict[str, Any], full_content: str, grade_name: str) -> Dict[str, Any]:
+        """
+        Enhance AI result with data from PDF datasheets
+
+        Args:
+            result: AI search result dictionary
+            full_content: Full AI response text
+            grade_name: Steel grade name
+
+        Returns:
+            Enhanced result dictionary
+        """
+        if not self.pdf_parser:
+            return result
+
+        try:
+            # Check if PDF URL is in result
+            pdf_url = result.get('pdf_url')
+
+            # If not, try to find PDF URLs in the full response text
+            if not pdf_url:
+                pdf_urls = find_pdf_urls_in_text(full_content)
+                if pdf_urls:
+                    pdf_url = pdf_urls[0]  # Take first PDF
+
+            if not pdf_url:
+                return result
+
+            print(f"Found PDF datasheet: {pdf_url}")
+            print("Downloading and parsing PDF...")
+
+            # Parse PDF
+            pdf_data = self.pdf_parser.parse_pdf_from_url(pdf_url)
+
+            if not pdf_data:
+                print("Failed to parse PDF")
+                return result
+
+            # Try to extract composition using AI (more accurate)
+            composition = None
+            if self.api_key and 'text' in pdf_data:
+                try:
+                    from openai import OpenAI
+                    client = OpenAI(api_key=self.api_key)
+                    composition = self.pdf_parser.extract_composition_with_ai(pdf_data['text'], client)
+                    if composition:
+                        print("Extracted chemical composition from PDF using AI")
+                except Exception as e:
+                    print(f"AI extraction error: {e}")
+
+            # Fallback to regex extraction
+            if not composition and 'composition' in pdf_data:
+                composition = pdf_data['composition']
+                if composition:
+                    print("Extracted chemical composition from PDF using regex")
+
+            # Update result with PDF data
+            if composition:
+                # Update chemical elements with more accurate PDF data
+                for element in ['c', 'cr', 'mo', 'v', 'w', 'co', 'ni', 'mn', 'si', 's', 'p', 'cu', 'nb', 'n', 'ti', 'al']:
+                    if element in composition and composition[element]:
+                        result[element] = composition[element]
+                        print(f"  Updated {element.upper()}: {composition[element]}")
+
+                # Add metadata
+                result['pdf_source'] = pdf_url
+                result['pdf_extracted'] = True
+
+            return result
+
+        except Exception as e:
+            print(f"Error enhancing with PDF: {e}")
+            return result
+
     def _create_prompt(self, grade_name: str) -> str:
         """Create prompt for OpenAI"""
         return f"""Find detailed information about steel grade "{grade_name}".
+
+IMPORTANT: If you find a PDF datasheet with this steel grade's information, include the PDF URL in the "pdf_url" field.
+Look for manufacturer datasheets (Bohler, Uddeholm, Voestalpine, etc.) that contain accurate chemical composition.
 
 Provide the following information in JSON format:
 {{
@@ -234,12 +330,14 @@ Provide the following information in JSON format:
     "application": "typical applications",
     "properties": "key properties (hardness, corrosion resistance, etc.)",
     "manufacturer": "manufacturer if it's a proprietary grade",
-    "source": "information source"
+    "source": "information source",
+    "pdf_url": "URL to PDF datasheet if found"
 }}
 
 If the steel grade is not found or you're uncertain, set "found": false and provide as much information as possible.
 Use null for unknown chemical elements.
 Be precise with chemical composition ranges.
+CRITICAL: Only provide factual data from reliable sources. Never invent or estimate chemical composition values.
 """
 
     def _parse_ai_response(self, content: str, grade_name: str) -> Optional[Dict[str, Any]]:
