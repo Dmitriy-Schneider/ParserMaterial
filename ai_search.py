@@ -14,28 +14,40 @@ from database_schema import get_connection
 class AISearch:
     """AI-powered search for steel grades using OpenAI API"""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, perplexity_key: Optional[str] = None):
         """
-        Initialize AI search with OpenAI API key
+        Initialize AI search with OpenAI and Perplexity API keys
 
         Args:
             api_key: OpenAI API key (if None, will try to get from environment)
+            perplexity_key: Perplexity API key (if None, will try to get from environment)
         """
+        # OpenAI configuration
         self.api_key = api_key or os.getenv('OPENAI_API_KEY')
         self.model = os.getenv('OPENAI_MODEL', 'gpt-4')
         self.max_tokens = int(os.getenv('OPENAI_MAX_TOKENS', '2000'))
         self.temperature = float(os.getenv('OPENAI_TEMPERATURE', '0.3'))
+
+        # Perplexity configuration
+        self.perplexity_key = perplexity_key or os.getenv('PERPLEXITY_API_KEY')
+        self.perplexity_model = os.getenv('PERPLEXITY_MODEL', 'sonar-pro')
+
+        # Common settings
         self.cache_ttl = int(os.getenv('AI_CACHE_TTL', '86400'))  # 24 hours
         self.enabled = os.getenv('ENABLE_AI_FALLBACK', 'True').lower() == 'true'
 
-        # Validate API key
-        if self.enabled and not self.api_key:
-            print("WARNING: OPENAI_API_KEY not found. AI search will be disabled.")
+        # Check if at least one API is available
+        if self.enabled and not self.api_key and not self.perplexity_key:
+            print("WARNING: No AI API keys found. AI search will be disabled.")
+            print("Set OPENAI_API_KEY or PERPLEXITY_API_KEY in .env file")
             self.enabled = False
 
     def search_steel(self, grade_name: str) -> Optional[Dict[str, Any]]:
         """
-        Search for steel grade information using AI
+        Search for steel grade information using AI with cascade fallback:
+        1. Check cache
+        2. Try OpenAI GPT-4 (if available)
+        3. Try Perplexity (if available and OpenAI failed)
 
         Args:
             grade_name: Name of the steel grade to search
@@ -51,19 +63,31 @@ class AISearch:
         if cached_result:
             return cached_result
 
-        # Search using OpenAI
-        try:
-            result = self._search_with_openai(grade_name)
+        result = None
 
-            if result:
-                # Save to cache
-                self._save_to_cache(grade_name, result)
+        # Try OpenAI first (if available)
+        if self.api_key:
+            try:
+                result = self._search_with_openai(grade_name)
+                if result:
+                    result['ai_source'] = 'openai'
+            except Exception as e:
+                print(f"OpenAI search error for '{grade_name}': {e}")
 
-            return result
+        # If OpenAI failed or not available, try Perplexity
+        if not result and self.perplexity_key:
+            try:
+                result = self._search_with_perplexity(grade_name)
+                if result:
+                    result['ai_source'] = 'perplexity'
+            except Exception as e:
+                print(f"Perplexity search error for '{grade_name}': {e}")
 
-        except Exception as e:
-            print(f"AI search error for '{grade_name}': {e}")
-            return None
+        # Save to cache if found
+        if result:
+            self._save_to_cache(grade_name, result)
+
+        return result
 
     def _search_with_openai(self, grade_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -117,6 +141,69 @@ class AISearch:
             return None
         except Exception as e:
             print(f"OpenAI API error: {e}")
+            return None
+
+    def _search_with_perplexity(self, grade_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Search for steel using Perplexity API (with internet access)
+
+        Args:
+            grade_name: Steel grade name
+
+        Returns:
+            Dictionary with steel information
+        """
+        try:
+            # Import OpenAI (Perplexity uses compatible API)
+            from openai import OpenAI
+
+            # Create Perplexity client
+            client = OpenAI(
+                api_key=self.perplexity_key,
+                base_url="https://api.perplexity.ai"
+            )
+
+            # Create prompt
+            prompt = self._create_prompt(grade_name)
+
+            # Add instruction to search the internet
+            system_message = (
+                "You are an expert metallurgist and steel database specialist. "
+                "Search the internet for accurate, up-to-date information about the requested steel grade. "
+                "Look for manufacturer specifications, datasheets, and technical documentation. "
+                "Return information in valid JSON format only."
+            )
+
+            # Call Perplexity API
+            response = client.chat.completions.create(
+                model=self.perplexity_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_message
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=self.temperature,
+                max_tokens=self.max_tokens
+            )
+
+            # Parse response
+            content = response.choices[0].message.content
+
+            # Extract JSON from response
+            result = self._parse_ai_response(content, grade_name)
+
+            return result
+
+        except ImportError:
+            print("ERROR: openai package not installed. Run: pip install openai")
+            return None
+        except Exception as e:
+            print(f"Perplexity API error: {e}")
             return None
 
     def _create_prompt(self, grade_name: str) -> str:
@@ -182,9 +269,7 @@ Be precise with chemical composition ranges.
                 # Ensure grade name is set
                 data['grade'] = data.get('grade', grade_name)
 
-                # Add metadata
-                data['ai_source'] = 'openai'
-                data['ai_model'] = self.model
+                # Add metadata (ai_source will be set by caller)
                 data['ai_timestamp'] = datetime.now().isoformat()
 
                 return data
