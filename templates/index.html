@@ -305,6 +305,81 @@
             font-size: 9px;
             color: rgba(255, 255, 255, 0.8);
         }
+
+        .pagination {
+            padding: 20px;
+            text-align: center;
+            background: #f8f9fa;
+            border-top: 2px solid #e9ecef;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .btn-page {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .btn-page:hover {
+            background: #1976d2;
+        }
+
+        .btn-page:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-save {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background-color 0.3s;
+        }
+
+        .btn-save:hover {
+            background: #45a049;
+        }
+
+        .btn-delete {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background-color 0.3s;
+        }
+
+        .btn-delete:hover {
+            background: #da190b;
+        }
+
+        .ai-badge {
+            background: #ff9800;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 9px;
+            margin-left: 5px;
+        }
+
+        #pageInfo {
+            font-weight: 600;
+            color: #495057;
+        }
     </style>
 </head>
 <body>
@@ -455,18 +530,32 @@
                         <th style="min-width: 70px;">Nb</th>
                         <th style="min-width: 70px;">N</th>
                         <th style="min-width: 100px;">Other Elements</th>
+                        <th style="min-width: 150px;">Standard</th>
+                        <th style="min-width: 80px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
                     <tr>
-                        <td colspan="18" class="loading">Loading data...</td>
+                        <td colspan="20" class="loading">Loading data...</td>
                     </tr>
                 </tbody>
             </table>
         </div>
+
+        <!-- Pagination controls -->
+        <div class="pagination" id="paginationControls" style="display: none;">
+            <button class="btn-page" onclick="previousPage()">◀ Previous</button>
+            <span id="pageInfo">Page 1 of 1</span>
+            <button class="btn-page" onclick="nextPage()">Next ▶</button>
+        </div>
     </div>
 
     <script>
+        // Pagination state
+        let currentPage = 1;
+        let itemsPerPage = 20;
+        let allSteels = [];
+
         // Load statistics on page load
         fetch('/api/stats')
             .then(response => response.json())
@@ -489,7 +578,7 @@
 
             // Build query string
             const params = new URLSearchParams();
-            
+
             const grade = document.getElementById('gradeFilter').value;
             if (grade) {
                 params.append('grade', grade);
@@ -497,10 +586,10 @@
                     params.append('exact', 'true');
                 }
             }
-            
+
             const base = document.getElementById('baseFilter').value;
             if (base) params.append('base', base);
-            
+
             // techFilter removed - no longer used
 
             // Add element filters
@@ -515,7 +604,9 @@
             fetch(`/api/steels?${params.toString()}`)
                 .then(response => response.json())
                 .then(data => {
-                    displaySteels(data);
+                    allSteels = data;
+                    currentPage = 1;
+                    displayCurrentPage();
                     document.getElementById('resultCount').textContent = data.length;
                 })
                 .catch(error => {
@@ -523,24 +614,49 @@
                 });
         }
 
-        // Display steel data
-        function displaySteels(steels) {
+        // Display current page of results
+        function displayCurrentPage() {
             const tbody = document.getElementById('tableBody');
-            
-            if (steels.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="18">No results found</td></tr>';
+            const paginationControls = document.getElementById('paginationControls');
+
+            if (allSteels.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="20">No results found</td></tr>';
+                paginationControls.style.display = 'none';
                 return;
             }
 
-            tbody.innerHTML = steels.map(steel => {
+            // Calculate pagination
+            const totalPages = Math.ceil(allSteels.length / itemsPerPage);
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, allSteels.length);
+            const pageData = allSteels.slice(startIndex, endIndex);
+
+            // Display data
+            tbody.innerHTML = pageData.map(steel => {
                 let gradeCell = steel.grade || '';
+                const isAI = steel.id === 'AI';
+
                 if (steel.link) {
                     gradeCell = `<a href="${steel.link}" target="_blank" class="grade-link">${steel.grade}</a>`;
                 }
-                
+                if (isAI) {
+                    gradeCell += '<span class="ai-badge">AI</span>';
+                }
+
                 // Replace asterisks with spaces in analogues
                 let analoguesCell = (steel.analogues || '').replace(/\*/g, ' ');
-                
+
+                // Standard column
+                let standardCell = steel.standard || '';
+
+                // Actions column
+                let actionsCell = '';
+                if (isAI) {
+                    actionsCell = `<button class="btn-save" onclick="saveSteelToDB('${steel.grade}')">Save to DB</button>`;
+                } else {
+                    actionsCell = `<button class="btn-delete" onclick="deleteSteelFromDB('${steel.grade}')">Delete</button>`;
+                }
+
                 return `
                 <tr>
                     <td>${gradeCell}</td>
@@ -561,9 +677,104 @@
                     <td>${steel.nb || ''}</td>
                     <td>${steel.n || ''}</td>
                     <td>${steel.other_elements || ''}</td>
+                    <td>${standardCell}</td>
+                    <td>${actionsCell}</td>
                 </tr>
             `;
             }).join('');
+
+            // Update pagination controls
+            if (totalPages > 1) {
+                paginationControls.style.display = 'flex';
+                document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+
+                // Enable/disable buttons
+                const prevBtn = paginationControls.querySelector('button:first-child');
+                const nextBtn = paginationControls.querySelector('button:last-child');
+                prevBtn.disabled = currentPage === 1;
+                nextBtn.disabled = currentPage === totalPages;
+            } else {
+                paginationControls.style.display = 'none';
+            }
+        }
+
+        // Pagination functions
+        function nextPage() {
+            const totalPages = Math.ceil(allSteels.length / itemsPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                displayCurrentPage();
+            }
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                displayCurrentPage();
+            }
+        }
+
+        // Save AI result to database
+        function saveSteelToDB(gradeName) {
+            if (!confirm(`Save steel grade "${gradeName}" to database?`)) {
+                return;
+            }
+
+            // Find the steel in current results
+            const steel = allSteels.find(s => s.grade === gradeName);
+            if (!steel) {
+                alert('Steel data not found');
+                return;
+            }
+
+            fetch('/api/steels/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(steel)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`✅ ${gradeName} saved to database!`);
+                    // Refresh the search to show updated data
+                    searchSteels();
+                } else {
+                    alert(`❌ Error: ${data.error || 'Unknown error'}`);
+                }
+            })
+            .catch(error => {
+                alert(`❌ Error: ${error.message}`);
+            });
+        }
+
+        // Delete steel from database
+        function deleteSteelFromDB(gradeName) {
+            if (!confirm(`Delete steel grade "${gradeName}" from database?`)) {
+                return;
+            }
+
+            fetch('/api/steels/delete', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ grade: gradeName })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`✅ ${gradeName} deleted from database!`);
+                    // Refresh the search
+                    searchSteels();
+                } else {
+                    alert(`❌ Error: ${data.error || 'Unknown error'}`);
+                }
+            })
+            .catch(error => {
+                alert(`❌ Error: ${error.message}`);
+            });
         }
 
         // Exact search function
