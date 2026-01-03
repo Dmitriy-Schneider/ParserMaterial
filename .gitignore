@@ -53,4 +53,7 @@ Thumbs.db
 chromedriver
 *.log
 
+# Reference documentation
+reference_docs/
+
 
