@@ -61,8 +61,8 @@ class AISearch:
         """
         Search for steel grade information using AI with cascade fallback:
         1. Check cache
-        2. Try OpenAI GPT-4 (if available)
-        3. Try Perplexity (if available and OpenAI failed)
+        2. Try Perplexity (PRIORITY - internet access, more accurate)
+        3. Try OpenAI GPT-4 (if Perplexity failed)
 
         Args:
             grade_name: Name of the steel grade to search
@@ -80,37 +80,45 @@ class AISearch:
 
         result = None
 
-        # Try OpenAI first (if available)
-        if self.api_key:
+        # Try Perplexity FIRST (PRIORITY - has internet access)
+        if self.perplexity_key:
             try:
-                result = self._search_with_openai(grade_name)
-                if result:
-                    result['ai_source'] = 'openai'
-            except Exception as e:
-                print(f"OpenAI search error for '{grade_name}': {e}")
-
-        # If OpenAI failed or not available, try Perplexity
-        if not result and self.perplexity_key:
-            try:
+                print(f"[Perplexity] Searching for '{grade_name}' with internet access...")
                 result = self._search_with_perplexity(grade_name)
                 if result:
                     result['ai_source'] = 'perplexity'
+                    print(f"[Perplexity] Found result for '{grade_name}'")
             except Exception as e:
-                print(f"Perplexity search error for '{grade_name}': {e}")
+                print(f"[Perplexity] Search error for '{grade_name}': {e}")
 
-        # Validate result before caching
-        if result:
-            # Validate chemical composition
-            is_valid = self._validate_composition(result)
-            result['validated'] = is_valid
+        # If Perplexity failed or not available, try OpenAI as fallback
+        if not result and self.api_key:
+            try:
+                print(f"[OpenAI] Fallback search for '{grade_name}'...")
+                result = self._search_with_openai(grade_name)
+                if result:
+                    result['ai_source'] = 'openai'
+                    print(f"[OpenAI] Found result for '{grade_name}'")
+            except Exception as e:
+                print(f"[OpenAI] Search error for '{grade_name}': {e}")
 
-            if not is_valid:
-                print(f"WARNING: AI result for '{grade_name}' failed validation - NOT CACHING")
-                result['validation_warning'] = "Chemical composition validation failed. Data may be inaccurate."
-            else:
-                # Only save to cache if validated
-                self._save_to_cache(grade_name, result)
-                print(f"✓ Result validated and cached for '{grade_name}'")
+        # If nothing found, return clear message
+        if not result:
+            print(f"[AI Search] Марка '{grade_name}' не найдена ни в одном источнике")
+            return None
+
+        # Strict validation before caching
+        is_valid = self._validate_composition(result)
+        result['validated'] = is_valid
+
+        if not is_valid:
+            print(f"[VALIDATION FAILED] AI result for '{grade_name}' - данные могут быть неточными - НЕ КЕШИРУЕТСЯ")
+            result['validation_warning'] = "Химический состав не прошел валидацию. Данные могут быть неточными."
+            # Do NOT cache invalid data
+        else:
+            # Only save to cache if validated
+            self._save_to_cache(grade_name, result)
+            print(f"[OK] Результат проверен и сохранен в кеш для '{grade_name}'")
 
         return result
 
@@ -191,12 +199,18 @@ class AISearch:
             # Create prompt
             prompt = self._create_prompt(grade_name)
 
-            # Add instruction to search the internet
+            # Add instruction to search the internet with strict verification
             system_message = (
                 "You are an expert metallurgist and steel database specialist. "
-                "Search the internet for accurate, up-to-date information about the requested steel grade. "
-                "Look for manufacturer specifications, datasheets, and technical documentation. "
-                "Return information in valid JSON format only."
+                "CRITICAL REQUIREMENTS:\n"
+                "1. Search MULTIPLE sources (manufacturer datasheets, MatWeb, steelnumber.com, standards)\n"
+                "2. Cross-verify chemical composition from AT LEAST 2 different reliable sources\n"
+                "3. NEVER invent, estimate or guess values - only use verified factual data\n"
+                "4. If chemical composition differs between sources, use manufacturer datasheet as primary\n"
+                "5. If analogues not confirmed in standards - set to null\n"
+                "6. If information not found or uncertain - set 'found': false\n"
+                "7. Return information in valid JSON format only.\n"
+                "8. Prefer manufacturer PDF datasheets over general databases"
             )
 
             # Call Perplexity API

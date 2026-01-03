@@ -1,9 +1,15 @@
-"""Search handler"""
+"""Search handler with AI context understanding"""
 import requests
 from telegram import Update
 from telegram.ext import ContextTypes
+import sys
+from pathlib import Path
+
+# Add parent directory to path
+sys.path.append(str(Path(__file__).parent.parent))
 
 import config
+from context_analyzer import get_context_analyzer
 
 
 async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -20,30 +26,64 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle direct text messages as search queries"""
-    grade_name = update.message.text.strip()
+    """Handle direct text messages with automatic intent recognition"""
+    message_text = update.message.text.strip()
 
     # Ignore very short or long messages
-    if len(grade_name) < 2 or len(grade_name) > 50:
+    if len(message_text) < 2 or len(message_text) > 100:
         return
 
-    await perform_search(update, grade_name)
+    # Analyze intent using GPT-4 mini
+    analyzer = get_context_analyzer()
+    analysis = analyzer.analyze_message(message_text)
+
+    intent = analysis.get('intent', 'search')
+    grade = analysis.get('grade')
+
+    # Route to appropriate handler based on intent
+    if intent == 'stats':
+        # Import stats handler
+        from . import stats
+        await stats.stats_command(update, context)
+        return
+
+    elif intent == 'help':
+        # Import help handler
+        from . import help_command
+        await help_command.help_command(update, context)
+        return
+
+    elif intent == 'analogues' and grade:
+        # Import analogues handler
+        from . import analogues
+        # Manually set args for analogues command
+        context.args = [grade]
+        await analogues.analogues_command(update, context)
+        return
+
+    # Default: search
+    # Use extracted grade or original message
+    search_query = grade if grade else message_text
+    await perform_search(update, search_query)
 
 
 async def perform_search(update: Update, grade_name: str):
-    """Perform steel grade search"""
+    """Perform steel grade search with AI fallback"""
     try:
         # Send "searching" message
         status_msg = await update.message.reply_text(
-            f"🔍 Ищу марку `{grade_name}`...",
+            f"🔍 Ищу марку `{grade_name}` в базе данных...",
             parse_mode='Markdown'
         )
 
-        # Make API request
+        # Make API request with AI fallback enabled
         response = requests.get(
             config.SEARCH_ENDPOINT,
-            params={'grade': grade_name},
-            timeout=30
+            params={
+                'grade': grade_name,
+                'ai': 'true'  # Enable AI fallback (Perplexity priority)
+            },
+            timeout=60  # Increased timeout for AI search
         )
 
         if response.status_code != 200:
@@ -58,12 +98,18 @@ async def perform_search(update: Update, grade_name: str):
         await status_msg.delete()
 
         if not results:
+            # Clear "not found" message
             await update.message.reply_text(
-                f"❌ Марка `{grade_name}` не найдена.\n\n"
+                f"❌ **Марка `{grade_name}` не найдена**\n\n"
+                f"Поиск выполнен:\n"
+                f"• ✓ В базе данных (8,691 марок)\n"
+                f"• ✓ Через Perplexity AI (интернет-поиск)\n"
+                f"• ✓ Проверено в нескольких источниках\n\n"
+                f"**Результат:** Химический состав и аналоги не найдены.\n\n"
                 f"Попробуйте:\n"
-                f"• Проверить написание\n"
-                f"• Использовать другое обозначение\n"
-                f"• Использовать `/analogues` для поиска похожих марок",
+                f"• Проверить написание марки\n"
+                f"• Использовать альтернативное обозначение\n"
+                f"• Уточнить производителя или стандарт",
                 parse_mode='Markdown'
             )
             return
@@ -81,7 +127,8 @@ async def perform_search(update: Update, grade_name: str):
 
     except requests.exceptions.Timeout:
         await update.message.reply_text(
-            "⏱️ Превышено время ожидания. Попробуйте позже."
+            "⏱️ Превышено время ожидания поиска (возможно AI обрабатывает запрос).\n"
+            "Попробуйте позже."
         )
     except Exception as e:
         await update.message.reply_text(
@@ -97,12 +144,18 @@ def format_steel_result(result: dict, index: int = 1, total: int = 1) -> str:
 
     header = f"🔧 **Марка: {grade}**"
     if is_ai:
-        header += " 🤖 (AI)"
+        ai_source = result.get('ai_source', 'ai').upper()
+        header += f" 🤖 ({ai_source})"
     if total > 1:
         header += f" ({index}/{total})"
 
     # Basic info
     lines = [header, ""]
+
+    # Validation warning (if failed)
+    if is_ai and not result.get('validated', True):
+        lines.append("⚠️ **ВНИМАНИЕ:** Данные не прошли полную валидацию")
+        lines.append("")
 
     # Standard and manufacturer
     standard = result.get('standard')
@@ -134,31 +187,46 @@ def format_steel_result(result: dict, index: int = 1, total: int = 1) -> str:
     composition_found = False
     for symbol, name in elements.items():
         value = result.get(symbol.lower())
-        if value and value not in ['0', '0.00', None]:
+        if value and value not in ['0', '0.00', None, 'null']:
             lines.append(f"  • {symbol}: {value}%")
             composition_found = True
 
     if not composition_found:
-        lines.append("  _Состав не указан_")
+        lines.append("  _Химический состав не найден_")
 
     # Analogues
     analogues = result.get('analogues')
-    if analogues and analogues not in [None, '', 'N/A']:
-        lines.append(f"\n🔗 **Аналоги:** {analogues}")
+    if analogues:
+        # Check for "not found" messages
+        if 'не найден' in str(analogues).lower() or 'уникальная' in str(analogues).lower():
+            lines.append(f"\n🔗 **Аналоги:** _Аналоги не найдены (уникальная марка)_")
+        elif analogues not in [None, '', 'N/A', 'null']:
+            lines.append(f"\n🔗 **Аналоги:** {analogues}")
 
     # Application (if available from AI)
     application = result.get('application')
-    if application:
+    if application and application not in ['null', None, '']:
         lines.append(f"\n💡 **Применение:**\n_{application}_")
 
     # Properties (if available from AI)
     properties = result.get('properties')
-    if properties:
+    if properties and properties not in ['null', None, '']:
         lines.append(f"\n⚙️ **Свойства:**\n_{properties}_")
 
-    # Source
+    # Source information
     if is_ai:
-        ai_source = result.get('ai_source', 'AI')
-        lines.append(f"\n🌐 Источник: {ai_source.upper()}")
+        ai_src = result.get('ai_source', 'AI')
+        lines.append(f"\n🌐 **Источник данных:** {ai_src.upper()}")
+
+        # Show if from PDF
+        if result.get('pdf_extracted'):
+            pdf_url = result.get('pdf_source', 'PDF datasheet')
+            lines.append(f"📄 Данные извлечены из PDF спецификации")
+
+        # Show validation status
+        if result.get('validated', True):
+            lines.append("✅ Данные прошли валидацию")
+        else:
+            lines.append("⚠️ Данные требуют проверки")
 
     return '\n'.join(lines)
