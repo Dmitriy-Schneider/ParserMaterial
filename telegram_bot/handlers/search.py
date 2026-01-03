@@ -1,9 +1,10 @@
 """Search handler with AI context understanding"""
 import requests
-from telegram import Update
-from telegram.ext import ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, CallbackQueryHandler
 import sys
 from pathlib import Path
+import json
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -117,7 +118,28 @@ async def perform_search(update: Update, grade_name: str):
         # Format and send results
         for i, result in enumerate(results[:config.MAX_RESULTS_PER_MESSAGE], 1):
             message = format_steel_result(result, i, len(results))
-            await update.message.reply_text(message, parse_mode='Markdown')
+
+            # Add buttons for AI results
+            is_ai = result.get('id') == 'AI'
+            if is_ai:
+                keyboard = [[
+                    InlineKeyboardButton(
+                        "➕ Добавить в БД",
+                        callback_data=f"add:{result['grade']}"
+                    )
+                ]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(message, parse_mode='Markdown', reply_markup=reply_markup)
+            else:
+                # For database results, add delete button
+                keyboard = [[
+                    InlineKeyboardButton(
+                        "🗑️ Удалить из БД",
+                        callback_data=f"del:{result['grade']}"
+                    )
+                ]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(message, parse_mode='Markdown', reply_markup=reply_markup)
 
         # If more results exist
         if len(results) > config.MAX_RESULTS_PER_MESSAGE:
@@ -230,3 +252,88 @@ def format_steel_result(result: dict, index: int = 1, total: int = 1) -> str:
             lines.append("⚠️ Данные требуют проверки")
 
     return '\n'.join(lines)
+
+
+async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inline keyboard button callbacks"""
+    query = update.callback_query
+    await query.answer()
+
+    # Parse callback data
+    action, grade_name = query.data.split(':', 1)
+
+    if action == 'add':
+        # Get AI result from cache to add to database
+        try:
+            # Request API to get full result
+            response = requests.get(
+                f"{config.SEARCH_ENDPOINT}?grade={grade_name}&ai=true",
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                results = response.json()
+                if results and len(results) > 0:
+                    result = results[0]
+
+                    # Call API to add to database
+                    add_response = requests.post(
+                        f"{config.SEARCH_ENDPOINT.replace('/steels', '/steels/add')}",
+                        json=result,
+                        timeout=10
+                    )
+
+                    if add_response.status_code == 200:
+                        await query.edit_message_text(
+                            f"✅ Марка `{grade_name}` добавлена в базу данных!",
+                            parse_mode='Markdown'
+                        )
+                    else:
+                        error = add_response.json().get('error', 'Unknown error')
+                        await query.edit_message_text(
+                            f"❌ Ошибка добавления: {error}",
+                            parse_mode='Markdown'
+                        )
+                else:
+                    await query.edit_message_text(
+                        f"❌ Данные для `{grade_name}` не найдены",
+                        parse_mode='Markdown'
+                    )
+            else:
+                await query.edit_message_text(
+                    f"❌ Ошибка получения данных: {response.status_code}",
+                    parse_mode='Markdown'
+                )
+
+        except Exception as e:
+            await query.edit_message_text(
+                f"❌ Ошибка: {str(e)}",
+                parse_mode='Markdown'
+            )
+
+    elif action == 'del':
+        # Delete from database
+        try:
+            response = requests.post(
+                f"{config.SEARCH_ENDPOINT.replace('/steels', '/steels/delete')}",
+                json={'grade': grade_name},
+                timeout=10
+            )
+
+            if response.status_code == 200:
+                await query.edit_message_text(
+                    f"✅ Марка `{grade_name}` удалена из базы данных!",
+                    parse_mode='Markdown'
+                )
+            else:
+                error = response.json().get('error', 'Unknown error')
+                await query.edit_message_text(
+                    f"❌ Ошибка удаления: {error}",
+                    parse_mode='Markdown'
+                )
+
+        except Exception as e:
+            await query.edit_message_text(
+                f"❌ Ошибка: {str(e)}",
+                parse_mode='Markdown'
+            )

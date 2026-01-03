@@ -9,6 +9,7 @@ from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
+    CallbackQueryHandler,
     filters,
     ContextTypes
 )
@@ -41,6 +42,9 @@ def main():
         filters.TEXT & ~filters.COMMAND,
         search.handle_text_message
     ))
+
+    # Register callback handler for inline buttons (Add/Delete)
+    application.add_handler(CallbackQueryHandler(search.handle_button_callback))
 
     # Start bot
     logger.info("Starting ParserSteel Telegram Bot...")

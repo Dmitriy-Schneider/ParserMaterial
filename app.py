@@ -174,6 +174,103 @@ def ai_search_endpoint():
         }), 500
 
 
+@app.route('/api/steels/add', methods=['POST'])
+def add_steel():
+    """Add AI search result to main database"""
+    data = request.get_json() or {}
+
+    if not data.get('grade'):
+        return jsonify({'error': 'Grade is required'}), 400
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Check if already exists
+        cursor.execute("SELECT id FROM steel_grades WHERE grade = ?", (data['grade'],))
+        if cursor.fetchone():
+            return jsonify({'error': 'Grade already exists in database'}), 409
+
+        # Insert new record
+        cursor.execute("""
+            INSERT INTO steel_grades (
+                grade, base, c, cr, mo, v, w, co, ni, mn, si, s, p, cu, nb, n,
+                tech, standard, manufacturer, analogues, link
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            data.get('grade'),
+            data.get('base', 'Fe'),
+            data.get('c'),
+            data.get('cr'),
+            data.get('mo'),
+            data.get('v'),
+            data.get('w'),
+            data.get('co'),
+            data.get('ni'),
+            data.get('mn'),
+            data.get('si'),
+            data.get('s'),
+            data.get('p'),
+            data.get('cu'),
+            data.get('nb'),
+            data.get('n'),
+            data.get('application') or data.get('tech'),
+            data.get('standard'),
+            data.get('manufacturer'),
+            data.get('analogues'),
+            data.get('source') or data.get('pdf_url')
+        ))
+
+        conn.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Grade {data["grade"]} added to database',
+            'id': cursor.lastrowid
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
+@app.route('/api/steels/delete', methods=['POST'])
+def delete_steel():
+    """Delete steel grade from database"""
+    data = request.get_json() or {}
+
+    if not data.get('grade'):
+        return jsonify({'error': 'Grade is required'}), 400
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        # Check if exists
+        cursor.execute("SELECT id FROM steel_grades WHERE grade = ?", (data['grade'],))
+        row = cursor.fetchone()
+
+        if not row:
+            return jsonify({'error': 'Grade not found in database'}), 404
+
+        # Delete
+        cursor.execute("DELETE FROM steel_grades WHERE grade = ?", (data['grade'],))
+        conn.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'Grade {data["grade"]} deleted from database'
+        })
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """Get statistics about the database"""
