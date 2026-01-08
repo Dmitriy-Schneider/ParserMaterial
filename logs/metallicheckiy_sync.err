@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_metallicheckiy_sync.py", line 499, in <module>
+    main()
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_metallicheckiy_sync.py", line 456, in main
+    records = build_records(grades, report_dir, refresh=args.refresh, delay=args.delay, limit=args.limit)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_metallicheckiy_sync.py", line 263, in build_records
+    html = fetch(
+           ^^^^^^
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_metallicheckiy_sync.py", line 135, in fetch
+    return raw.decode(encoding, errors="replace")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+LookupError: unknown encoding: w

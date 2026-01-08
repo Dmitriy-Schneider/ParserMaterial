@@ -1,0 +1,55 @@
+Traceback (most recent call last):
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_splav_sync.py", line 540, in <module>
+    main()
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_splav_sync.py", line 496, in main
+    records = build_records(grades, report_dir, refresh=args.refresh, delay=args.delay, limit=args.limit)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_splav_sync.py", line 265, in build_records
+    html = fetch(
+           ^^^^^^
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_splav_sync.py", line 129, in fetch
+    with urlopen(req, timeout=30) as resp:
+         ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py", line 519, in open
+    response = self._open(req, data)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py", line 496, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "C:\Users\dmitr\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py", line 1377, in http_open
+    return self.do_open(http.client.HTTPConnection, req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py", line 1352, in do_open
+    r = h.getresponse()
+        ^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\AppData\Local\Programs\Python\Python311\Lib\http\client.py", line 1386, in getresponse
+    response.begin()
+  File "C:\Users\dmitr\AppData\Local\Programs\Python\Python311\Lib\http\client.py", line 325, in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\AppData\Local\Programs\Python\Python311\Lib\http\client.py", line 286, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\AppData\Local\Programs\Python\Python311\Lib\socket.py", line 706, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+TimeoutError: timed out
+Traceback (most recent call last):
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_metallicheckiy_sync.py", line 544, in <module>
+    main()
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_metallicheckiy_sync.py", line 484, in main
+    categories = collect_categories(report_dir, refresh=args.refresh, delay=args.delay, verbose=args.verbose)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_metallicheckiy_sync.py", line 155, in collect_categories
+    html = fetch(url, report_dir / "metal_cache" / "index.html", refresh=refresh, delay=delay)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dmitr\OneDrive\Desktop\AL\ParserSteel\ru_metallicheckiy_sync.py", line 135, in fetch
+    return raw.decode(encoding, errors="replace")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+LookupError: unknown encoding: w

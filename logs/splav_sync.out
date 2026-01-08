@@ -1,0 +1,22 @@
+[INFO] Grades discovered: 3299
+[WARN] Fetch failed: http://www.splav-kharkov.com/mat_start.php?name_id=2563 (HTTP Error 503: SERVICE UNAVAILABLE)
+[WARN] Fetch failed: http://www.splav-kharkov.com/mat_start.php?name_id=2054 (HTTP Error 503: SERVICE UNAVAILABLE)
+[INFO] Parsed 100/3299
+[INFO] Parsed 200/3299
+[INFO] Parsed 300/3299
+[INFO] Parsed 400/3299
+[INFO] Parsed 500/3299
+[INFO] Parsed 600/3299
+[INFO] Parsed 700/3299
+[INFO] Parsed 800/3299
+[INFO] Parsed 900/3299
+[INFO] Parsed 1000/3299
+[INFO] Parsed 1100/3299
+[INFO] Parsed 1200/3299
+[INFO] Parsed 1300/3299
+[INFO] Parsed 1400/3299
+[INFO] Parsed 1500/3299
+[INFO] Parsed 1600/3299
+[INFO] Parsed 1700/3299
+[INFO] Parsed 1800/3299
+[INFO] Parsed 1900/3299

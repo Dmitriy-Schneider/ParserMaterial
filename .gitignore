@@ -56,4 +56,17 @@ chromedriver
 # Reference documentation
 reference_docs/
 
+# Archive (cleanup)
+archive/
 
+# Database WAL files
+database/*.db-wal
+database/*.db-shm
+
+# Reports archive
+reports/archive/
+
+# Temporary files
+nul
+temp/
+tmp/

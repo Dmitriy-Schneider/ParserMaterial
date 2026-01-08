@@ -1,0 +1,125 @@
+# Улучшенные паттерны для fill_standards_with_ai.py
+# Добавить в функцию detect_standard_pattern() после строки 131
+
+НОВЫЕ ПАТТЕРНЫ (добавить в gov_patterns):
+
+    # M-серия (AISI высокоскоростные инструментальные стали)
+    (r'^M(\d+)$', 'AISI-M'),  # M1, M2, M4, M35, M42
+    (r'^M(\d+)\s*(?:Eur|HC)?$', 'AISI-M'),  # M2 Eur, M4 HC
+
+    # SKH-серия (JIS высокоскоростные стали - Япония)
+    (r'^SKH(\d+)$', 'JIS-SKH'),  # SKH50, SKH51, SKH54
+    (r'^SKH[-]?(\d+)$', 'JIS-SKH'),  # SKH-9, SKH-51
+
+    # X-серия (DIN/EN европейские стали)
+    (r'^X(\d+)([A-Z][a-zA-Z0-9-]+)$', 'DIN-X'),  # X100CrMoV5, X1F
+    (r'^X\d+[A-Z]+', 'DIN-X'),  # X130WMoCrV
+
+    # HS-серия (высокоскоростные инструментальные)
+    (r'^HS(\d+[-\d]+)$', 'ISO-HS'),  # HS6-5-2, HS2-9-1-8
+    (r'^HS(\d+)$', 'ISO-HS'),  # HS100, HS12M
+
+    # K-серия (Bohler фирменные марки)
+    (r'^K(\d+)$', 'BOHLER-K'),  # K294, K980, K990
+
+    # Nickel-серия (UNS никелевые сплавы)
+    (r'^Nickel\s*(\d{3})$', 'UNS-NICKEL'),  # Nickel 200, Nickel 205
+
+    # Р-серия (GOST быстрорежущие стали - Россия)
+    (r'^[РP](\d+[МMА-Я\d]+)$', 'GOST-R'),  # Р6М5, Р0М2СФ10, P5M
+    (r'^[РP]\d+[МMА-Я]', 'GOST-R'),  # Р18К5Ф2
+
+ОБРАБОТКА НОВЫХ ПАТТЕРНОВ (добавить в код после match):
+
+    # Обработка специальных паттернов
+    if std_type == 'AISI-M':
+        return {
+            'type': 'government',
+            'standard_prefix': 'AISI',
+            'standard_number': 'M' + match.group(1),
+            'manufacturer': None,
+            'country': 'США'
+        }
+
+    elif std_type == 'JIS-SKH':
+        return {
+            'type': 'government',
+            'standard_prefix': 'JIS',
+            'standard_number': 'SKH' + match.group(1),
+            'manufacturer': None,
+            'country': 'Япония'
+        }
+
+    elif std_type == 'DIN-X':
+        return {
+            'type': 'government',
+            'standard_prefix': 'DIN',
+            'standard_number': grade,  # Полное название
+            'manufacturer': None,
+            'country': 'Германия'
+        }
+
+    elif std_type == 'ISO-HS':
+        return {
+            'type': 'government',
+            'standard_prefix': 'ISO',
+            'standard_number': 'HS' + match.group(1),
+            'manufacturer': None,
+            'country': 'Международный'
+        }
+
+    elif std_type == 'BOHLER-K':
+        return {
+            'type': 'proprietary',
+            'standard_prefix': None,
+            'standard_number': None,
+            'manufacturer': 'Bohler',
+            'country': 'Австрия'
+        }
+
+    elif std_type == 'UNS-NICKEL':
+        nickel_num = match.group(1)
+        uns_code = f"N0{nickel_num}00"  # Nickel 200 -> N02200
+        return {
+            'type': 'government',
+            'standard_prefix': 'UNS',
+            'standard_number': uns_code,
+            'manufacturer': None,
+            'country': 'США'
+        }
+
+    elif std_type == 'GOST-R':
+        return {
+            'type': 'government',
+            'standard_prefix': 'GOST',
+            'standard_number': grade,  # Полное название
+            'manufacturer': None,
+            'country': 'Россия'
+        }
+
+ВАЛИДАЦИЯ (добавить в format_standard_value перед return):
+
+def format_standard_value(detection_result, ai_result=None):
+    """
+    Форматировать значение для столбца Standard
+    С валидацией для фильтрации N/A
+    """
+    # ... существующий код ...
+
+    # ВАЖНО: Валидация перед возвратом
+    # Не сохранять N/A, unknown, пустые значения
+    if standard_value:
+        # Проверка на недопустимые значения
+        invalid_patterns = ['N/A', 'unknown', 'Н/A', 'Неподтверждено', 'не найден']
+
+        for invalid in invalid_patterns:
+            if invalid in standard_value:
+                return None  # Не сохранять
+
+        # Проверка минимальной длины
+        if len(standard_value.strip()) < 3:
+            return None
+
+        return standard_value
+
+    return None
