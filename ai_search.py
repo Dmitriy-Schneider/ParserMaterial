@@ -107,14 +107,15 @@ class AISearch:
             print(f"[AI Search] Марка '{grade_name}' не найдена ни в одном источнике")
             return None
 
-        # Strict validation before caching
+        # Strict validation before caching - MANDATORY chemical composition
         is_valid = self._validate_composition(result)
         result['validated'] = is_valid
 
         if not is_valid:
-            print(f"[VALIDATION FAILED] AI result for '{grade_name}' - данные могут быть неточными - НЕ КЕШИРУЕТСЯ")
-            result['validation_warning'] = "Химический состав не прошел валидацию. Данные могут быть неточными."
-            # Do NOT cache invalid data
+            print(f"[REJECTED] AI result for '{grade_name}' - химический состав не найден или некорректен")
+            print(f"[INFO] Марка НЕ будет добавлена в базу данных (требуется химический состав)")
+            # REJECT: Do not return invalid results (no chemical composition = no add to database)
+            return None
         else:
             # Only save to cache if validated
             self._save_to_cache(grade_name, result)
@@ -326,6 +327,7 @@ class AISearch:
     def _validate_composition(self, result: Dict[str, Any]) -> bool:
         """
         Validate chemical composition values
+        REQUIRES at least one valid chemical element to be present
 
         Args:
             result: AI search result
@@ -334,6 +336,8 @@ class AISearch:
             True if composition is valid, False otherwise
         """
         elements = ['c', 'cr', 'mo', 'v', 'w', 'co', 'ni', 'mn', 'si', 's', 'p', 'cu', 'nb', 'n']
+
+        valid_elements_found = 0
 
         for element in elements:
             value = result.get(element)
@@ -344,7 +348,7 @@ class AISearch:
             value_str = str(value).strip().lower()
 
             # Skip if null/none/n/a
-            if value_str in ['null', 'none', 'n/a', '-']:
+            if value_str in ['null', 'none', 'n/a', '-', '']:
                 continue
 
             try:
@@ -368,6 +372,8 @@ class AISearch:
                         if max_val > 100 or min_val < 0:
                             print(f"Invalid {element} range: {value} (should be 0-100%)")
                             return False
+
+                        valid_elements_found += 1
                 else:
                     # Single value
                     val = float(value_str.replace(',', '.'))
@@ -381,10 +387,18 @@ class AISearch:
                         print(f"Invalid {element}: {value} (should be 0-100%)")
                         return False
 
+                    valid_elements_found += 1
+
             except (ValueError, AttributeError) as e:
                 print(f"Cannot parse {element} value: {value}")
                 return False
 
+        # MANDATORY: At least one valid chemical element must be present
+        if valid_elements_found == 0:
+            print(f"VALIDATION FAILED: No valid chemical composition found")
+            return False
+
+        print(f"[OK] Found {valid_elements_found} valid chemical elements")
         return True
 
     def _normalize_analogues(self, analogues: Any) -> str:
@@ -408,12 +422,18 @@ class AISearch:
 
 CRITICAL INSTRUCTIONS:
 1. Search multiple reliable sources (manufacturer websites, MatWeb, steelnumber.com, etc.)
-2. If you find a PDF datasheet, include the URL in "pdf_url" field
+2. Chemical composition is MANDATORY - if you cannot find verified chemical composition, set "found": false
 3. Cross-check chemical composition from at least 2 sources if possible
 4. NEVER invent or estimate values - only use data from verified sources
 5. For analogues, provide only confirmed equivalents from standards (AISI, DIN, JIS, etc.)
 6. If no analogues found, set analogues to null (NOT empty string)
 7. Chemical composition must be realistic (C: 0-5%, other elements: 0-100%)
+8. MANDATORY: Provide source URL with the following priority:
+   a) If found on official manufacturer website -> provide manufacturer product page URL
+   b) If found in standard document -> provide standard document URL
+   c) If found in PDF datasheet -> provide PDF URL
+   d) Otherwise -> provide the most reliable source URL you found
+9. Include manufacturer name and country for proprietary grades
 
 Provide the following information in JSON format:
 {{
@@ -435,18 +455,24 @@ Provide the following information in JSON format:
     "cu": "copper content",
     "nb": "niobium content",
     "n": "nitrogen content",
-    "standard": "standard (AISI, DIN, GOST, JIS, etc.)",
+    "standard": "standard (AISI, DIN, GOST, JIS, etc.) or null if proprietary",
     "application": "typical applications",
     "properties": "key properties (hardness, corrosion resistance, etc.)",
-    "manufacturer": "manufacturer if it's a proprietary grade",
-    "source": "information source",
-    "pdf_url": "URL to PDF datasheet if found"
+    "manufacturer": "manufacturer name if it's a proprietary grade",
+    "manufacturer_country": "manufacturer country (e.g., Австрия, США, Германия, Франция, Швеция, Япония, Россия)",
+    "source_url": "MANDATORY: URL to the source (manufacturer website > standard > PDF > other reliable source)"
 }}
 
-If the steel grade is not found or you're uncertain, set "found": false and provide as much information as possible.
-Use null for unknown chemical elements.
-Be precise with chemical composition ranges.
-CRITICAL: Only provide factual data from reliable sources. Never invent or estimate chemical composition values.
+CRITICAL REQUIREMENTS:
+- If chemical composition is not found or cannot be verified, set "found": false
+- source_url is MANDATORY - always provide the most reliable source URL
+- For proprietary grades, include both manufacturer name and country
+- Only provide factual data from reliable sources. Never invent or estimate values.
+
+Example for proprietary grade K888:
+- manufacturer: "Bohler Edelstahl"
+- manufacturer_country: "Австрия"
+- source_url: "https://www.bohler-edelstahl.com/en/products/k888-matrix/" or "https://www.bohler-edelstahl.com/app/uploads/sites/248/productdb/api/k888-matrix_en_gb.pdf"
 """
 
     def _parse_ai_response(self, content: str, grade_name: str) -> Optional[Dict[str, Any]]:
@@ -475,6 +501,28 @@ CRITICAL: Only provide factual data from reliable sources. Never invent or estim
 
                 # Ensure grade name is set
                 data['grade'] = data.get('grade', grade_name)
+
+                # Extract and map source_url to link field
+                source_url = data.get('source_url') or data.get('pdf_url')
+                if source_url and source_url not in ['null', None, '']:
+                    data['link'] = source_url
+                    print(f"[SOURCE] Extracted link: {source_url}")
+                else:
+                    print(f"[WARNING] No source URL found for '{grade_name}'")
+
+                # Handle manufacturer country
+                manufacturer = data.get('manufacturer')
+                manufacturer_country = data.get('manufacturer_country')
+
+                # If we have manufacturer and country, combine them for standard field if no standard exists
+                if manufacturer and manufacturer_country:
+                    # Format: "Manufacturer, Country"
+                    manufacturer_info = f"{manufacturer}, {manufacturer_country}"
+
+                    # If no standard specified, use manufacturer info as standard
+                    if not data.get('standard') or data.get('standard') in ['null', None, '']:
+                        data['standard'] = manufacturer_info
+                        print(f"[INFO] Set standard to manufacturer info: {manufacturer_info}")
 
                 # Normalize analogues
                 if 'analogues' in data:

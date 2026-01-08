@@ -7,8 +7,9 @@ def create_database():
     """Create the database and tables"""
     # Ensure database folder exists
     os.makedirs(config.DB_FOLDER, exist_ok=True)
-    
-    conn = sqlite3.connect(config.DB_FILE)
+
+    conn = sqlite3.connect(config.DB_FILE, timeout=30.0)
+    conn.execute('PRAGMA journal_mode=WAL')
     cursor = conn.cursor()
     
     # Create steel grades table
@@ -55,13 +56,22 @@ def create_database():
 
 
 def get_connection():
-    """Get database connection"""
-    return sqlite3.connect(config.DB_FILE)
+    """
+    Get database connection with timeout and WAL mode for concurrent access
+
+    - timeout=30.0: Wait up to 30 seconds if database is locked
+    - WAL mode: Better concurrency (readers don't block writers)
+    """
+    conn = sqlite3.connect(config.DB_FILE, timeout=30.0)
+    # Enable WAL mode for better concurrent access (one writer + multiple readers)
+    conn.execute('PRAGMA journal_mode=WAL')
+    return conn
 
 
 def migrate_database():
     """Migrate existing database to add new columns"""
-    conn = sqlite3.connect(config.DB_FILE)
+    conn = sqlite3.connect(config.DB_FILE, timeout=30.0)
+    conn.execute('PRAGMA journal_mode=WAL')
     cursor = conn.cursor()
 
     try:

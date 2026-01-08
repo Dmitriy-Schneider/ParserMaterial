@@ -33,7 +33,10 @@ def get_steels():
     grade_filter = request.args.get('grade', '').strip()
     exact_search = request.args.get('exact', 'false').lower() == 'true'
     base_filter = request.args.get('base', '').strip()
-    use_ai = request.args.get('ai', 'true').lower() == 'true'
+
+    # AI Search enabled ONLY for explicit request from Telegram Bot
+    # Web Exact Search (🔍) searches ONLY in database (exact match, no AI fallback)
+    use_ai = request.args.get('ai', 'false').lower() == 'true'
     # tech_filter removed - no longer used
     
     # Element filters
@@ -121,7 +124,9 @@ def get_steels():
             if ai_result:
                 # Format AI result to match database schema
                 ai_result['id'] = 'AI'
-                ai_result['link'] = None
+                # Keep the link field from AI result (don't override)
+                if 'link' not in ai_result:
+                    ai_result['link'] = None
                 results = [ai_result]
 
         return jsonify(results)
@@ -218,7 +223,7 @@ def add_steel():
             data.get('standard'),
             data.get('manufacturer'),
             data.get('analogues'),
-            data.get('source') or data.get('pdf_url')
+            data.get('link') or data.get('source_url') or data.get('pdf_url')
         ))
 
         conn.commit()

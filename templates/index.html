@@ -50,11 +50,41 @@
             color: white;
             padding: 30px;
             text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .header-logo {
+            height: 50px;
+            width: auto;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+        }
+
+        .header-content {
+            flex: 1;
+            max-width: 800px;
         }
 
         .header h1 {
             font-size: 2.5em;
             margin-bottom: 10px;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .header-logo {
+                height: 35px;
+            }
+
+            .header h1 {
+                font-size: 1.5em;
+            }
         }
 
         .filter-panel {
@@ -94,13 +124,33 @@
             transition: background-color 0.3s;
             min-width: 40px;
         }
-        
+
         .btn-exact-search:hover {
             background: #45a049;
         }
-        
+
         .btn-exact-search:active {
             background: #3d8b40;
+        }
+
+        .btn-ai-search {
+            background: #9c27b0;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+            min-width: 40px;
+        }
+
+        .btn-ai-search:hover {
+            background: #7b1fa2;
+        }
+
+        .btn-ai-search:active {
+            background: #6a1b9a;
         }
         
         .btn-clear-compact {
@@ -385,8 +435,11 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🔧 Steel Grade Catalog</h1>
-            <p>Interactive database of steel grades and compositions</p>
+            <img src="/static/logo_white.svg" alt="ВЭМ Logo" class="header-logo">
+            <div class="header-content">
+                <h1>🔧 Steel Grade Catalog</h1>
+                <p>Interactive database of steel grades and compositions</p>
+            </div>
         </div>
 
         <div class="filter-panel">
@@ -394,7 +447,8 @@
                 <div class="filter-group">
                     <label>Grade:</label>
                     <input type="text" id="gradeFilter" placeholder="Enter steel grade">
-                    <button class="btn-exact-search" onclick="searchExact()" title="Exact search">🔍</button>
+                    <button class="btn-exact-search" onclick="searchExact()" title="Exact match in database">🔍</button>
+                    <button class="btn-ai-search" onclick="searchWithAI()" title="AI Search (Perplexity)">🤖</button>
                     <button class="btn-clear-compact" onclick="clearFilters()" title="Clear all filters">Clear</button>
                 </div>
                 <div class="filter-group">
@@ -572,7 +626,7 @@
             });
 
         // Search function
-        function searchSteels(exactSearch = false) {
+        function searchSteels(exactSearch = false, useAI = false) {
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '<tr><td colspan="20" class="loading">Searching...</td></tr>';
 
@@ -584,6 +638,9 @@
                 params.append('grade', grade);
                 if (exactSearch) {
                     params.append('exact', 'true');
+                }
+                if (useAI) {
+                    params.append('ai', 'true');
                 }
             }
 
@@ -777,9 +834,14 @@
             });
         }
 
-        // Exact search function
+        // Exact search function (database only, exact match)
         function searchExact() {
-            searchSteels(true);
+            searchSteels(true, false);
+        }
+
+        // AI search function (database + Perplexity AI if not found)
+        function searchWithAI() {
+            searchSteels(false, true);
         }
 
         // Clear all filters
