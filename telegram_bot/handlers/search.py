@@ -119,19 +119,14 @@ async def perform_search(update: Update, grade_name: str):
         for i, result in enumerate(results[:config.MAX_RESULTS_PER_MESSAGE], 1):
             message = format_steel_result(result, i, len(results))
 
-            # Add buttons for AI results
+            # Check if AI result
             is_ai = result.get('id') == 'AI'
+
             if is_ai:
-                keyboard = [[
-                    InlineKeyboardButton(
-                        "➕ Добавить в БД",
-                        callback_data=f"add:{result['grade']}"
-                    )
-                ]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.message.reply_text(message, parse_mode='Markdown', reply_markup=reply_markup)
+                # For AI results - no buttons (removed add to DB functionality)
+                await update.message.reply_text(message, parse_mode='Markdown')
             else:
-                # For database results, add delete button
+                # For database results - add delete button
                 keyboard = [[
                     InlineKeyboardButton(
                         "🗑️ Удалить из БД",
@@ -235,7 +230,9 @@ def format_steel_result(result: dict, index: int = 1, total: int = 1) -> str:
     if properties and properties not in ['null', None, '']:
         lines.append(f"\n⚙️ **Свойства:**\n_{properties}_")
 
-    # Source information
+    # Source information and link
+    source_url = result.get('link') or result.get('source_url')
+
     if is_ai:
         ai_src = result.get('ai_source', 'AI')
         lines.append(f"\n🌐 **Источник данных:** {ai_src.upper()}")
@@ -250,6 +247,11 @@ def format_steel_result(result: dict, index: int = 1, total: int = 1) -> str:
             lines.append("✅ Данные прошли валидацию")
         else:
             lines.append("⚠️ Данные требуют проверки")
+
+    # Add source link if available (for both AI and DB results)
+    if source_url and source_url not in ['null', None, '', 'N/A']:
+        # Format as Markdown link for cleaner appearance
+        lines.append(f"\n🔗 [Ссылка на источник]({source_url})")
 
     return '\n'.join(lines)
 

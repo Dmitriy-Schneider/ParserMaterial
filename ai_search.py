@@ -401,6 +401,27 @@ class AISearch:
         print(f"[OK] Found {valid_elements_found} valid chemical elements")
         return True
 
+    def _clean_citation_references(self, text: str) -> str:
+        """
+        Remove citation references like [1], [2], [3] from text
+
+        Args:
+            text: Text with potential citation references
+
+        Returns:
+            Cleaned text without references
+        """
+        if not text or text in ['null', None, '']:
+            return text
+
+        import re
+        # Remove patterns like [1], [2], [3], [1][2], etc.
+        cleaned = re.sub(r'\[\d+\]', '', str(text))
+        # Remove multiple spaces
+        cleaned = re.sub(r'\s+', ' ', cleaned)
+        # Remove trailing/leading spaces
+        return cleaned.strip()
+
     def _normalize_analogues(self, analogues: Any) -> str:
         """
         Normalize analogues field
@@ -414,7 +435,7 @@ class AISearch:
         if analogues is None or str(analogues).strip().lower() in ['none', 'null', 'n/a', '-', '']:
             return "Аналоги не найдены (уникальная марка)"
 
-        return str(analogues).strip()
+        return self._clean_citation_references(str(analogues).strip())
 
     def _create_prompt(self, grade_name: str) -> str:
         """Create prompt for OpenAI"""
@@ -434,6 +455,8 @@ CRITICAL INSTRUCTIONS:
    c) If found in PDF datasheet -> provide PDF URL
    d) Otherwise -> provide the most reliable source URL you found
 9. Include manufacturer name and country for proprietary grades
+10. IMPORTANT: Provide "application" and "properties" fields in RUSSIAN language (На русском языке)
+11. Do NOT include citation references like [1], [2], [3] in your response - provide clean text only
 
 Provide the following information in JSON format:
 {{
@@ -456,8 +479,8 @@ Provide the following information in JSON format:
     "nb": "niobium content",
     "n": "nitrogen content",
     "standard": "standard (AISI, DIN, GOST, JIS, etc.) or null if proprietary",
-    "application": "typical applications",
-    "properties": "key properties (hardness, corrosion resistance, etc.)",
+    "application": "typical applications IN RUSSIAN (e.g., Износостойкие детали горнодобывающего оборудования, ковши экскаваторов, кузова самосвалов)",
+    "properties": "key properties IN RUSSIAN (e.g., Низкоуглеродистая сталь с твердостью около 500 HBW; изгибаемая и свариваемая; высокая износостойкость)",
     "manufacturer": "manufacturer name if it's a proprietary grade",
     "manufacturer_country": "manufacturer country (e.g., Австрия, США, Германия, Франция, Швеция, Япония, Россия)",
     "source_url": "MANDATORY: URL to the source (manufacturer website > standard > PDF > other reliable source)"
@@ -467,11 +490,15 @@ CRITICAL REQUIREMENTS:
 - If chemical composition is not found or cannot be verified, set "found": false
 - source_url is MANDATORY - always provide the most reliable source URL
 - For proprietary grades, include both manufacturer name and country
-- Only provide factual data from reliable sources. Never invent or estimate values.
+- Only provide factual data from reliable sources. Never invent or estimate values
+- application and properties MUST be in RUSSIAN language
+- Do NOT include citation references [1], [2], [3] etc. - clean text only
 
 Example for proprietary grade K888:
 - manufacturer: "Bohler Edelstahl"
 - manufacturer_country: "Австрия"
+- application: "Износостойкие детали для горнодобывающей промышленности, металлургии, переработки отходов"
+- properties: "Мартенситная износостойкая сталь с высокой твердостью и хорошей свариваемостью"
 - source_url: "https://www.bohler-edelstahl.com/en/products/k888-matrix/" or "https://www.bohler-edelstahl.com/app/uploads/sites/248/productdb/api/k888-matrix_en_gb.pdf"
 """
 
@@ -527,6 +554,14 @@ Example for proprietary grade K888:
                 # Normalize analogues
                 if 'analogues' in data:
                     data['analogues'] = self._normalize_analogues(data['analogues'])
+
+                # Clean citation references from text fields
+                if 'application' in data and data['application']:
+                    data['application'] = self._clean_citation_references(data['application'])
+                if 'properties' in data and data['properties']:
+                    data['properties'] = self._clean_citation_references(data['properties'])
+                if 'standard' in data and data['standard']:
+                    data['standard'] = self._clean_citation_references(data['standard'])
 
                 # Add metadata (ai_source will be set by caller)
                 data['ai_timestamp'] = datetime.now().isoformat()
