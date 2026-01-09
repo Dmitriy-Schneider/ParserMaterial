@@ -77,10 +77,11 @@ class AISearch:
         if not self.enabled:
             return None
 
-        # Check cache first
-        cached_result = self._get_from_cache(grade_name)
-        if cached_result:
-            return cached_result
+        # CACHE DISABLED: Always perform fresh search for accurate results
+        # Reason: API results need re-verification, web Perplexity performs better
+        # cached_result = self._get_from_cache(grade_name)
+        # if cached_result:
+        #     return cached_result
 
         result = None
 
@@ -112,10 +113,11 @@ class AISearch:
             print(f"[INFO] Марка НЕ будет добавлена в базу данных (требуется химический состав)")
             # REJECT: Do not return invalid results (no chemical composition = no add to database)
             return None
-        else:
-            # Only save to cache if validated
-            self._save_to_cache(grade_name, result)
-            print(f"[OK] Результат проверен и сохранен в кеш для '{grade_name}'")
+
+        # CACHE DISABLED: Do not save results to cache
+        # Reason: Need ability to re-run searches with improved prompts/models
+        # self._save_to_cache(grade_name, result)
+        print(f"[OK] Результат проверен (кэш отключен, повторный поиск возможен)")
 
         return result
 
