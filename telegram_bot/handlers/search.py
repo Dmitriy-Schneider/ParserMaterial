@@ -119,22 +119,8 @@ async def perform_search(update: Update, grade_name: str):
         for i, result in enumerate(results[:config.MAX_RESULTS_PER_MESSAGE], 1):
             message = format_steel_result(result, i, len(results))
 
-            # Check if AI result
-            is_ai = result.get('id') == 'AI'
-
-            if is_ai:
-                # For AI results - no buttons (removed add to DB functionality)
-                await update.message.reply_text(message, parse_mode='Markdown')
-            else:
-                # For database results - add delete button
-                keyboard = [[
-                    InlineKeyboardButton(
-                        "🗑️ Удалить из БД",
-                        callback_data=f"del:{result['grade']}"
-                    )
-                ]]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                await update.message.reply_text(message, parse_mode='Markdown', reply_markup=reply_markup)
+            # Send message without buttons (removed all button functionality)
+            await update.message.reply_text(message, parse_mode='Markdown')
 
         # If more results exist
         if len(results) > config.MAX_RESULTS_PER_MESSAGE:
