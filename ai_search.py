@@ -48,10 +48,11 @@ class AISearch:
         self.cache_ttl = int(os.getenv('AI_CACHE_TTL', '86400'))  # 24 hours
         self.enabled = os.getenv('ENABLE_AI_FALLBACK', 'True').lower() == 'true'
 
-        # Check if at least one API is available
-        if self.enabled and not self.api_key and not self.perplexity_key:
-            print("WARNING: No AI API keys found. AI search will be disabled.")
-            print("Set OPENAI_API_KEY or PERPLEXITY_API_KEY in .env file")
+        # Check if Perplexity API is available (OpenAI removed for accuracy)
+        if self.enabled and not self.perplexity_key:
+            print("WARNING: Perplexity API key not found. AI search will be disabled.")
+            print("Set PERPLEXITY_API_KEY in .env file")
+            print("Note: OpenAI fallback removed to ensure 100% accuracy")
             self.enabled = False
 
         # Initialize PDF parser
@@ -59,10 +60,13 @@ class AISearch:
 
     def search_steel(self, grade_name: str) -> Optional[Dict[str, Any]]:
         """
-        Search for steel grade information using AI with cascade fallback:
+        Search for steel grade information using Perplexity AI ONLY.
+        OpenAI removed as fallback to ensure 100% accuracy.
+
+        Workflow:
         1. Check cache
-        2. Try Perplexity (PRIORITY - internet access, more accurate)
-        3. Try OpenAI GPT-4 (if Perplexity failed)
+        2. Try Perplexity (ONLY source - internet access, accurate)
+        3. If not found - return None (better than false information)
 
         Args:
             grade_name: Name of the steel grade to search
@@ -80,7 +84,7 @@ class AISearch:
 
         result = None
 
-        # Try Perplexity FIRST (PRIORITY - has internet access)
+        # Try Perplexity ONLY (no fallback to OpenAI for 100% accuracy)
         if self.perplexity_key:
             try:
                 print(f"[Perplexity] Searching for '{grade_name}' with internet access...")
@@ -90,21 +94,13 @@ class AISearch:
                     print(f"[Perplexity] Found result for '{grade_name}'")
             except Exception as e:
                 print(f"[Perplexity] Search error for '{grade_name}': {e}")
+        else:
+            print(f"[WARNING] Perplexity API key not configured. AI search disabled.")
 
-        # If Perplexity failed or not available, try OpenAI as fallback
-        if not result and self.api_key:
-            try:
-                print(f"[OpenAI] Fallback search for '{grade_name}'...")
-                result = self._search_with_openai(grade_name)
-                if result:
-                    result['ai_source'] = 'openai'
-                    print(f"[OpenAI] Found result for '{grade_name}'")
-            except Exception as e:
-                print(f"[OpenAI] Search error for '{grade_name}': {e}")
-
-        # If nothing found, return clear message
+        # If nothing found, return None (no false information)
         if not result:
-            print(f"[AI Search] Марка '{grade_name}' не найдена ни в одном источнике")
+            print(f"[AI Search] Марка '{grade_name}' не найдена через Perplexity")
+            print(f"[INFO] OpenAI fallback отключен для обеспечения достоверности на 100%")
             return None
 
         # Strict validation before caching - MANDATORY chemical composition
