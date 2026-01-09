@@ -42,7 +42,8 @@
       "Bash(.venvScriptspython.exe test_ai_k888.py)",
       "Bash(venvScriptspython.exe test_ai_k888.py)",
       "Bash(find:*)",
-      "Bash(git mv:*)"
+      "Bash(git mv:*)",
+      "Bash(grep:*)"
     ]
   }
 }

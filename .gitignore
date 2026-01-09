@@ -66,6 +66,11 @@ database/*.db-shm
 # Reports archive
 reports/archive/
 
+# HTML cache (removed during cleanup)
+reports/splav_cache/
+reports/metal_cache/
+reports/zknives_pages/
+
 # Temporary files
 nul
 temp/
