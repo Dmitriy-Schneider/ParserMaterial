@@ -417,6 +417,22 @@
             background: #da190b;
         }
 
+        .btn-fuzzy {
+            background: #ff9800;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: background-color 0.3s;
+            margin-left: 4px;
+        }
+
+        .btn-fuzzy:hover {
+            background: #f57c00;
+        }
+
         .ai-badge {
             background: #ff9800;
             color: white;
@@ -424,6 +440,120 @@
             border-radius: 3px;
             font-size: 9px;
             margin-left: 5px;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            overflow: auto;
+        }
+
+        .modal-content {
+            background: white;
+            margin: 50px auto;
+            padding: 0;
+            border-radius: 10px;
+            max-width: 1200px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            background: #ff9800;
+            color: white;
+            padding: 20px;
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 20px;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .fuzzy-params {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .fuzzy-param {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .fuzzy-param label {
+            font-weight: 600;
+            color: #495057;
+            font-size: 12px;
+        }
+
+        .fuzzy-param input {
+            padding: 8px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .btn-search-similar {
+            background: #ff9800;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+            width: 100%;
+        }
+
+        .btn-search-similar:hover {
+            background: #f57c00;
+        }
+
+        .similarity-badge {
+            background: #4caf50;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
         }
 
         #pageInfo {
@@ -604,6 +734,34 @@
         </div>
     </div>
 
+    <!-- Fuzzy Search Modal -->
+    <div id="fuzzyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔗 Find Similar Grades</h2>
+                <button class="modal-close" onclick="closeFuzzyModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="fuzzy-params">
+                    <div class="fuzzy-param">
+                        <label>Reference Grade:</label>
+                        <input type="text" id="fuzzyRefGrade" readonly>
+                    </div>
+                    <div class="fuzzy-param">
+                        <label>Tolerance (%):</label>
+                        <input type="number" id="fuzzyTolerance" value="50" min="0" max="100" step="5">
+                    </div>
+                    <div class="fuzzy-param">
+                        <label>Max Results:</label>
+                        <input type="number" id="fuzzyMaxResults" value="10" min="1" max="100">
+                    </div>
+                </div>
+                <button class="btn-search-similar" onclick="performFuzzySearch()">Search Similar Grades</button>
+                <div id="fuzzyResults" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Pagination state
         let currentPage = 1;
@@ -709,9 +867,15 @@
                 // Actions column
                 let actionsCell = '';
                 if (isAI) {
-                    actionsCell = `<button class="btn-save" onclick="saveSteelToDB('${steel.grade}')">Save to DB</button>`;
+                    actionsCell = `
+                        <button class="btn-save" onclick="saveSteelToDB('${steel.grade}')">Save</button>
+                        <button class="btn-fuzzy" onclick='openFuzzyModal(${JSON.stringify(steel)})'>Similar</button>
+                    `;
                 } else {
-                    actionsCell = `<button class="btn-delete" onclick="deleteSteelFromDB('${steel.grade}')">Delete</button>`;
+                    actionsCell = `
+                        <button class="btn-delete" onclick="deleteSteelFromDB('${steel.grade}')">Delete</button>
+                        <button class="btn-fuzzy" onclick='openFuzzyModal(${JSON.stringify(steel)})'>Similar</button>
+                    `;
                 }
 
                 return `
@@ -870,6 +1034,139 @@
 
         // Initial load
         searchSteels();
+
+        // Fuzzy Search Modal Functions
+        let currentRefSteel = null;
+
+        function openFuzzyModal(steel) {
+            currentRefSteel = steel;
+            document.getElementById('fuzzyRefGrade').value = steel.grade;
+            document.getElementById('fuzzyResults').innerHTML = '';
+            document.getElementById('fuzzyModal').style.display = 'block';
+        }
+
+        function closeFuzzyModal() {
+            document.getElementById('fuzzyModal').style.display = 'none';
+            currentRefSteel = null;
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('fuzzyModal');
+            if (event.target === modal) {
+                closeFuzzyModal();
+            }
+        }
+
+        function performFuzzySearch() {
+            if (!currentRefSteel) {
+                alert('No reference steel selected');
+                return;
+            }
+
+            const tolerance = parseFloat(document.getElementById('fuzzyTolerance').value);
+            const maxResults = parseInt(document.getElementById('fuzzyMaxResults').value);
+            const resultsDiv = document.getElementById('fuzzyResults');
+
+            resultsDiv.innerHTML = '<p style="text-align: center; color: #667eea;">Searching for similar grades...</p>';
+
+            // Prepare grade data for API
+            const gradeData = {
+                grade: currentRefSteel.grade,
+                c: currentRefSteel.c,
+                cr: currentRefSteel.cr,
+                ni: currentRefSteel.ni,
+                mo: currentRefSteel.mo,
+                v: currentRefSteel.v,
+                w: currentRefSteel.w,
+                co: currentRefSteel.co,
+                mn: currentRefSteel.mn,
+                si: currentRefSteel.si,
+                cu: currentRefSteel.cu,
+                nb: currentRefSteel.nb,
+                n: currentRefSteel.n,
+                s: currentRefSteel.s,
+                p: currentRefSteel.p
+            };
+
+            // Call Fuzzy Search API
+            fetch('/api/steels/fuzzy-search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    grade_data: gradeData,
+                    tolerance_percent: tolerance,
+                    max_results: maxResults
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.results.length > 0) {
+                    // Display results in a table
+                    let html = `
+                        <h3>Found ${data.found_count} similar grade${data.found_count > 1 ? 's' : ''}</h3>
+                        <p style="color: #666; font-size: 12px;">Tolerance: ${data.tolerance}%, Reference: ${data.reference_grade}</p>
+                        <div class="table-container" style="max-height: 400px;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Grade</th>
+                                        <th>Similarity</th>
+                                        <th>C</th>
+                                        <th>Cr</th>
+                                        <th>Mo</th>
+                                        <th>Ni</th>
+                                        <th>Mn</th>
+                                        <th>Si</th>
+                                        <th>Standard</th>
+                                        <th>Analogues</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+
+                    data.results.forEach(result => {
+                        let gradeCell = result.grade;
+                        if (result.link) {
+                            gradeCell = `<a href="${result.link}" target="_blank" class="grade-link">${result.grade}</a>`;
+                        }
+
+                        // Replace asterisks with spaces in analogues
+                        let analoguesCell = (result.analogues || '').replace(/\*/g, ' ');
+
+                        html += `
+                            <tr>
+                                <td>${gradeCell}</td>
+                                <td><span class="similarity-badge">${result.similarity}%</span></td>
+                                <td>${result.c || ''}</td>
+                                <td>${result.cr || ''}</td>
+                                <td>${result.mo || ''}</td>
+                                <td>${result.ni || ''}</td>
+                                <td>${result.mn || ''}</td>
+                                <td>${result.si || ''}</td>
+                                <td>${result.standard || ''}</td>
+                                <td style="max-width: 200px; white-space: normal;">${analoguesCell}</td>
+                            </tr>
+                        `;
+                    });
+
+                    html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+
+                    resultsDiv.innerHTML = html;
+                } else {
+                    resultsDiv.innerHTML = '<p style="text-align: center; color: #f44336;">No similar grades found. Try increasing tolerance.</p>';
+                }
+            })
+            .catch(error => {
+                resultsDiv.innerHTML = `<p style="text-align: center; color: #f44336;">Error: ${error.message}</p>`;
+            });
+        }
     </script>
 
     <!-- Fixed stats in corner -->
