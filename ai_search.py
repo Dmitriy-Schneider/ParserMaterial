@@ -226,8 +226,21 @@ class AISearch:
                 "5. If you cannot find data in Tier 1-3 sources, set partial fields to null (don't use Tier 4)\n"
                 "6. If analogues not confirmed in standards/manufacturer docs - set to null\n"
                 "7. If information not found or uncertain - indicate in confidence level\n"
-                "8. ALWAYS provide source_url to the HIGHEST TIER source you found\n"
-                "9. Return information in valid JSON format only"
+                "8. Return information in valid JSON format only\n\n"
+                "SOURCE_URL CRITICAL REQUIREMENTS:\n"
+                "- source_url MUST point to the page/PDF that contains CHEMICAL COMPOSITION\n"
+                "- For manufacturer grades: Link to product datasheet page or direct PDF with composition\n"
+                "- For standards: Link to standard document or official database entry\n"
+                "- NEVER link to: welding materials, accessories, processing guides, certificates\n"
+                "- VERIFY the URL actually contains chemical composition data before including it\n"
+                "- Examples of CORRECT URLs:\n"
+                "  ✓ https://www.ssab.com/brands-and-products/hardox/hardox-400 (product page with composition)\n"
+                "  ✓ https://www.ssab.com/.../hardox-400-datasheet.pdf (direct datasheet PDF)\n"
+                "  ✓ https://www.matweb.com/search/DataSheet.aspx?MatGUID=... (database entry)\n"
+                "- Examples of WRONG URLs:\n"
+                "  ✗ https://www.ssab.com/welding/hardox-400-welding-consumables (welding materials)\n"
+                "  ✗ https://www.ssab.com/processing/hardox-400-cutting (processing guide)\n"
+                "  ✗ https://www.ssab.com/certificates/hardox-400 (certificates, not composition)"
             )
 
             # Call Perplexity API
@@ -551,11 +564,17 @@ CRITICAL INSTRUCTIONS:
 5. For analogues, provide only confirmed equivalents from standards (AISI, DIN, JIS, etc.)
 6. If no analogues found, set analogues to null (NOT empty string)
 7. Chemical composition must be realistic (C: 0-5%, other elements: 0-100%)
-8. MANDATORY: Provide source URLs and indicate source tier for confidence scoring
-9. Include manufacturer name and country for proprietary grades
-10. IMPORTANT: Provide "application" and "properties" fields in RUSSIAN language (На русском языке)
-11. Do NOT include citation references like [1], [2], [3] in your response - provide clean text only
-12. NEW: Provide verification_sources array with all sources you used (for confidence scoring)
+8. Include manufacturer name and country for proprietary grades
+9. IMPORTANT: Provide "application" and "properties" fields in RUSSIAN language (На русском языке)
+10. Do NOT include citation references like [1], [2], [3] in your response - provide clean text only
+
+SOURCE_URL REQUIREMENTS (VERY IMPORTANT):
+11. source_url MUST be the EXACT page (HTML or PDF) where you FOUND THE CHEMICAL COMPOSITION
+12. Acceptable: manufacturer datasheet PDF, product HTML page with composition table, database entry
+13. NOT acceptable: welding materials, processing guides, certificates, accessories, general info pages
+14. VERIFY the URL you provide actually shows chemical composition when opened
+15. If multiple URLs have composition, choose: manufacturer datasheet PDF > product page HTML > database
+16. Provide source_tier (tier1/tier2/tier3) and verification_sources array for transparency
 
 Provide the following information in JSON format:
 {{
@@ -592,7 +611,7 @@ Provide the following information in JSON format:
 
 CRITICAL REQUIREMENTS:
 - If chemical composition is not found or cannot be verified, set "found": false
-- source_url is MANDATORY - always provide the most reliable source URL
+- source_url is MANDATORY - always provide URL to the page/PDF with CHEMICAL COMPOSITION
 - source_tier is MANDATORY - indicate tier1/tier2/tier3 based on source quality
 - verification_sources is OPTIONAL but RECOMMENDED - list all sources used for cross-verification
 - For proprietary grades, include both manufacturer name and country
@@ -600,12 +619,24 @@ CRITICAL REQUIREMENTS:
 - application and properties MUST be in RUSSIAN language
 - Do NOT include citation references [1], [2], [3] etc. - clean text only
 
-Example for proprietary grade K888:
+Examples of CORRECT source_url (page/PDF with composition):
+✓ "https://www.ssab.com/en/brands-and-products/hardox/hardox-400" (product page with composition table)
+✓ "https://www.ssab.com/.../hardox-400-datasheet.pdf" (direct PDF with composition)
+✓ "https://www.bohler-edelstahl.com/en/products/k888-matrix/" (product page with composition)
+✓ "https://www.matweb.com/search/DataSheet.aspx?MatGUID=..." (database with composition)
+
+Examples of WRONG source_url (no composition on these pages):
+✗ "https://www.ssab.com/welding/hardox-400-consumables" (welding materials, not steel composition)
+✗ "https://www.ssab.com/processing/hardox-400-cutting" (processing guide, not composition)
+✗ "https://www.ssab.com/certificates" (certificates, not datasheet)
+
+Example result for proprietary grade K888:
 - manufacturer: "Bohler Edelstahl"
 - manufacturer_country: "Австрия"
 - application: "Износостойкие детали для горнодобывающей промышленности, металлургии, переработки отходов"
 - properties: "Мартенситная износостойкая сталь с высокой твердостью и хорошей свариваемостью"
-- source_url: "https://www.bohler-edelstahl.com/en/products/k888-matrix/" or "https://www.bohler-edelstahl.com/app/uploads/sites/248/productdb/api/k888-matrix_en_gb.pdf"
+- source_url: "https://www.bohler-edelstahl.com/en/products/k888-matrix/" (page with composition table)
+- source_tier: "tier1"
 """
 
     def _parse_ai_response(self, content: str, grade_name: str) -> Optional[Dict[str, Any]]:
