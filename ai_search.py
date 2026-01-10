@@ -45,7 +45,7 @@ class AISearch:
         self.perplexity_model = os.getenv('PERPLEXITY_MODEL', 'sonar-pro')
 
         # Common settings
-        self.cache_ttl = int(os.getenv('AI_CACHE_TTL', '86400'))  # 24 hours
+        self.cache_ttl = int(os.getenv('AI_CACHE_TTL', '604800'))  # 7 days (was 24 hours)
         self.enabled = os.getenv('ENABLE_AI_FALLBACK', 'True').lower() == 'true'
 
         # Check if Perplexity API is available (OpenAI removed for accuracy)
@@ -77,11 +77,11 @@ class AISearch:
         if not self.enabled:
             return None
 
-        # CACHE DISABLED: Always perform fresh search for accurate results
-        # Reason: API results need re-verification, web Perplexity performs better
-        # cached_result = self._get_from_cache(grade_name)
-        # if cached_result:
-        #     return cached_result
+        # Check cache first (TTL: 7 days)
+        cached_result = self._get_from_cache(grade_name)
+        if cached_result:
+            print(f"[CACHE] Found cached result for '{grade_name}' (age: {cached_result.get('cache_age', 0):.0f}s)")
+            return cached_result
 
         result = None
 
@@ -104,20 +104,23 @@ class AISearch:
             print(f"[INFO] OpenAI fallback отключен для обеспечения достоверности на 100%")
             return None
 
-        # Strict validation before caching - MANDATORY chemical composition
+        # Validation (SOFTENED: allow partial data with warning)
         is_valid = self._validate_composition(result)
         result['validated'] = is_valid
 
         if not is_valid:
-            print(f"[REJECTED] AI result for '{grade_name}' - химический состав не найден или некорректен")
-            print(f"[INFO] Марка НЕ будет добавлена в базу данных (требуется химический состав)")
-            # REJECT: Do not return invalid results (no chemical composition = no add to database)
-            return None
+            print(f"[WARNING] AI result for '{grade_name}' - неполный химический состав")
+            print(f"[INFO] Результат будет показан с предупреждением о неполных данных")
+            # SOFTENED: Return result with warning instead of rejecting completely
+            result['warning'] = 'Неполные данные по химическому составу'
+            result['confidence'] = 'low'
+        else:
+            print(f"[OK] Найдено {result.get('_valid_elements_count', 0)} валидных элементов")
+            result['confidence'] = 'high'
 
-        # CACHE DISABLED: Do not save results to cache
-        # Reason: Need ability to re-run searches with improved prompts/models
-        # self._save_to_cache(grade_name, result)
-        print(f"[OK] Результат проверен (кэш отключен, повторный поиск возможен)")
+        # Save to cache (TTL: 7 days)
+        self._save_to_cache(grade_name, result)
+        print(f"[CACHE] Результат сохранен в кэш на 7 дней")
 
         return result
 
@@ -201,15 +204,25 @@ class AISearch:
             # Add instruction to search the internet with strict verification
             system_message = (
                 "You are an expert metallurgist and steel database specialist. "
-                "CRITICAL REQUIREMENTS:\n"
-                "1. Search MULTIPLE sources (manufacturer datasheets, MatWeb, steelnumber.com, standards)\n"
-                "2. Cross-verify chemical composition from AT LEAST 2 different reliable sources\n"
-                "3. NEVER invent, estimate or guess values - only use verified factual data\n"
-                "4. If chemical composition differs between sources, use manufacturer datasheet as primary\n"
-                "5. If analogues not confirmed in standards - set to null\n"
-                "6. If information not found or uncertain - set 'found': false\n"
-                "7. Return information in valid JSON format only.\n"
-                "8. Prefer manufacturer PDF datasheets over general databases"
+                "CRITICAL REQUIREMENTS:\n\n"
+                "SOURCE PRIORITY (highest to lowest):\n"
+                "1. TIER 1 (HIGHEST): Official manufacturer PDF datasheets (e.g., Bohler, SSAB, Hardox)\n"
+                "2. TIER 2: International standards documents (AISI, DIN, EN, GOST, JIS, GB)\n"
+                "3. TIER 3: Professional databases (MatWeb.com, steelnumber.com, key-to-steel.com)\n"
+                "4. TIER 4 (LOWEST): General websites (Wikipedia, forums, blogs) - DO NOT USE for chemical composition\n\n"
+                "VERIFICATION PROTOCOL:\n"
+                "1. Search MULTIPLE sources (minimum 2-3 different sources)\n"
+                "2. Cross-verify chemical composition from AT LEAST 2 reliable sources (Tier 1-3)\n"
+                "3. NEVER invent, estimate, or guess values - only use verified factual data\n"
+                "4. If chemical composition differs between sources:\n"
+                "   a) Prefer manufacturer datasheet (Tier 1)\n"
+                "   b) Then prefer standards (Tier 2)\n"
+                "   c) Then professional databases (Tier 3)\n"
+                "5. If you cannot find data in Tier 1-3 sources, set partial fields to null (don't use Tier 4)\n"
+                "6. If analogues not confirmed in standards/manufacturer docs - set to null\n"
+                "7. If information not found or uncertain - indicate in confidence level\n"
+                "8. ALWAYS provide source_url to the HIGHEST TIER source you found\n"
+                "9. Return information in valid JSON format only"
             )
 
             # Call Perplexity API
@@ -325,13 +338,13 @@ class AISearch:
     def _validate_composition(self, result: Dict[str, Any]) -> bool:
         """
         Validate chemical composition values
-        REQUIRES at least one valid chemical element to be present
+        SOFTENED: Allows results with partial or no composition (with warning)
 
         Args:
             result: AI search result
 
         Returns:
-            True if composition is valid, False otherwise
+            True if composition is valid (at least 1 element), False if no valid elements
         """
         elements = ['c', 'cr', 'mo', 'v', 'w', 'co', 'ni', 'mn', 'si', 's', 'p', 'cu', 'nb', 'n']
 
@@ -359,17 +372,17 @@ class AISearch:
 
                         # Validate ranges
                         if min_val > max_val:
-                            print(f"Invalid range for {element}: {value} (min > max)")
-                            return False
+                            print(f"[WARNING] Invalid range for {element}: {value} (min > max) - skipping")
+                            continue
 
                         # Check reasonable limits
                         if element == 'c' and (max_val > 5.0 or min_val < 0):
-                            print(f"Invalid carbon range: {value} (should be 0-5%)")
-                            return False
+                            print(f"[WARNING] Suspicious carbon range: {value} (should be 0-5%) - skipping")
+                            continue
 
                         if max_val > 100 or min_val < 0:
-                            print(f"Invalid {element} range: {value} (should be 0-100%)")
-                            return False
+                            print(f"[WARNING] Suspicious {element} range: {value} (should be 0-100%) - skipping")
+                            continue
 
                         valid_elements_found += 1
                 else:
@@ -378,22 +391,25 @@ class AISearch:
 
                     # Check reasonable limits
                     if element == 'c' and (val > 5.0 or val < 0):
-                        print(f"Invalid carbon: {value} (should be 0-5%)")
-                        return False
+                        print(f"[WARNING] Suspicious carbon: {value} (should be 0-5%) - skipping")
+                        continue
 
                     if val > 100 or val < 0:
-                        print(f"Invalid {element}: {value} (should be 0-100%)")
-                        return False
+                        print(f"[WARNING] Suspicious {element}: {value} (should be 0-100%) - skipping")
+                        continue
 
                     valid_elements_found += 1
 
             except (ValueError, AttributeError) as e:
-                print(f"Cannot parse {element} value: {value}")
-                return False
+                print(f"[WARNING] Cannot parse {element} value: {value} - skipping")
+                continue
 
-        # MANDATORY: At least one valid chemical element must be present
+        # Store count for reporting
+        result['_valid_elements_count'] = valid_elements_found
+
+        # SOFTENED: At least one valid chemical element recommended but not mandatory
         if valid_elements_found == 0:
-            print(f"VALIDATION FAILED: No valid chemical composition found")
+            print(f"[WARNING] No valid chemical composition found - result will be marked as low confidence")
             return False
 
         print(f"[OK] Found {valid_elements_found} valid chemical elements")

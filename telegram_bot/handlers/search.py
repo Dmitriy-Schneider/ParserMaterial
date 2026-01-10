@@ -71,9 +71,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def perform_search(update: Update, grade_name: str):
     """Perform steel grade search with AI fallback"""
     try:
-        # Send "searching" message
+        # Send "searching" message with progress indication
         status_msg = await update.message.reply_text(
-            f"🔍 Ищу марку `{grade_name}` в базе данных...",
+            f"🔍 Ищу марку `{grade_name}`...\n\n"
+            f"▪️ Проверка в базе данных (10,394 марок)\n"
+            f"▪️ Если не найдено → AI Search через Perplexity (20-30 сек)\n\n"
+            f"⏳ Пожалуйста, подождите...",
             parse_mode='Markdown'
         )
 
@@ -84,7 +87,7 @@ async def perform_search(update: Update, grade_name: str):
                 'grade': grade_name,
                 'ai': 'true'  # Enable AI fallback (Perplexity priority)
             },
-            timeout=60  # Increased timeout for AI search
+            timeout=60  # Increased timeout for AI search (Perplexity can take 20-30 sec)
         )
 
         if response.status_code != 200:
