@@ -106,7 +106,7 @@ async def perform_search(update: Update, grade_name: str):
             await update.message.reply_text(
                 f"❌ **Марка `{grade_name}` не найдена**\n\n"
                 f"Поиск выполнен:\n"
-                f"• ✓ В базе данных (8,691 марок)\n"
+                f"• ✓ В базе данных (10,394 марок)\n"
                 f"• ✓ Через Perplexity AI (интернет-поиск)\n"
                 f"• ✓ Проверено в нескольких источниках\n\n"
                 f"**Результат:** Химический состав и аналоги не найдены.\n\n"
