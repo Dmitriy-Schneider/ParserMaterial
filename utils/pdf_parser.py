@@ -75,6 +75,7 @@ class PDFParser:
     def extract_text_pdfplumber(self, pdf_path: str) -> Optional[str]:
         """
         Extract text from PDF using pdfplumber (best quality)
+        Also extracts tables which often contain chemical composition
 
         Args:
             pdf_path: Path to PDF file
@@ -90,14 +91,53 @@ class PDFParser:
                 text_parts = []
                 # Extract from first 5 pages (chemical composition usually on first pages)
                 for page in pdf.pages[:5]:
+                    # Extract regular text
                     text = page.extract_text()
                     if text:
                         text_parts.append(text)
+
+                    # Extract tables (chemical composition often in tables)
+                    tables = page.extract_tables()
+                    if tables:
+                        for table in tables:
+                            # Convert table to text representation
+                            table_text = self._table_to_text(table)
+                            if table_text:
+                                text_parts.append(f"\n[TABLE]\n{table_text}\n[/TABLE]\n")
 
                 return '\n\n'.join(text_parts)
 
         except Exception as e:
             print(f"Error extracting text with pdfplumber: {e}")
+            return None
+
+    def _table_to_text(self, table: List[List[str]]) -> Optional[str]:
+        """
+        Convert PDF table to text format
+
+        Args:
+            table: Table data from pdfplumber
+
+        Returns:
+            Text representation of table
+        """
+        if not table:
+            return None
+
+        try:
+            lines = []
+            for row in table:
+                if row:
+                    # Filter out None values
+                    cleaned_row = [str(cell).strip() if cell else '' for cell in row]
+                    # Only include rows with at least one non-empty cell
+                    if any(cleaned_row):
+                        lines.append(' | '.join(cleaned_row))
+
+            return '\n'.join(lines) if lines else None
+
+        except Exception as e:
+            print(f"Error converting table to text: {e}")
             return None
 
     def extract_text_pypdf2(self, pdf_path: str) -> Optional[str]:
@@ -155,6 +195,7 @@ class PDFParser:
     def extract_chemical_composition_regex(self, text: str) -> Dict[str, Any]:
         """
         Extract chemical composition using regex patterns
+        Enhanced to handle table formats
 
         Args:
             text: PDF text content
@@ -173,10 +214,14 @@ class PDFParser:
             # C 0.65
             # Carbon (C): 0.65%
             # C: 0.60-0.70%
+            # C | 0.65  (table format)
+            # | C | 0.60-0.70 | (table format)
             patterns = [
                 rf'{element}\s*[:\-]\s*([\d.,]+(?:\s*-\s*[\d.,]+)?)\s*%?',
                 rf'{element}\s+([\d.,]+(?:\s*-\s*[\d.,]+)?)\s*%?',
                 rf'{element.lower()}\s*[:\-]\s*([\d.,]+(?:\s*-\s*[\d.,]+)?)\s*%?',
+                rf'{element}\s*\|\s*([\d.,]+(?:\s*-\s*[\d.,]+)?)\s*%?',  # Table format
+                rf'\|\s*{element}\s*\|\s*([\d.,]+(?:\s*-\s*[\d.,]+)?)',  # Table with pipes
             ]
 
             for pattern in patterns:
@@ -185,8 +230,19 @@ class PDFParser:
                     value = match.group(1).strip()
                     # Clean value
                     value = value.replace(',', '.')
-                    composition[element.lower()] = value
-                    break
+                    # Skip if value looks wrong (too large or not numeric)
+                    try:
+                        # Check if it's a valid range or number
+                        if '-' in value:
+                            parts = value.split('-')
+                            float(parts[0].strip())
+                            float(parts[1].strip())
+                        else:
+                            float(value)
+                        composition[element.lower()] = value
+                        break
+                    except ValueError:
+                        continue
 
                 if element.lower() in composition:
                     break

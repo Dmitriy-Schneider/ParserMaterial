@@ -108,15 +108,20 @@ class AISearch:
         is_valid = self._validate_composition(result)
         result['validated'] = is_valid
 
+        # Calculate confidence score based on multiple factors
+        confidence_score = self._calculate_confidence_score(result, is_valid)
+        result['confidence'] = confidence_score['level']  # high, medium, or low
+        result['confidence_score'] = confidence_score['score']  # 0-100
+        result['confidence_reasons'] = confidence_score['reasons']
+
         if not is_valid:
             print(f"[WARNING] AI result for '{grade_name}' - неполный химический состав")
-            print(f"[INFO] Результат будет показан с предупреждением о неполных данных")
+            print(f"[INFO] Confidence: {confidence_score['level']} ({confidence_score['score']}/100)")
             # SOFTENED: Return result with warning instead of rejecting completely
             result['warning'] = 'Неполные данные по химическому составу'
-            result['confidence'] = 'low'
         else:
             print(f"[OK] Найдено {result.get('_valid_elements_count', 0)} валидных элементов")
-            result['confidence'] = 'high'
+            print(f"[INFO] Confidence: {confidence_score['level']} ({confidence_score['score']}/100)")
 
         # Save to cache (TTL: 7 days)
         self._save_to_cache(grade_name, result)
@@ -335,6 +340,89 @@ class AISearch:
             print(f"Error enhancing with PDF: {e}")
             return result
 
+    def _calculate_confidence_score(self, result: Dict[str, Any], has_valid_composition: bool) -> Dict[str, Any]:
+        """
+        Calculate confidence score based on multiple factors
+
+        Args:
+            result: AI search result
+            has_valid_composition: Whether composition validation passed
+
+        Returns:
+            Dictionary with level (high/medium/low), score (0-100), and reasons
+        """
+        score = 0
+        reasons = []
+
+        # Factor 1: Source tier (40 points max)
+        source_tier = result.get('source_tier', '').lower()
+        if source_tier == 'tier1':
+            score += 40
+            reasons.append('Tier 1 source (manufacturer datasheet)')
+        elif source_tier == 'tier2':
+            score += 30
+            reasons.append('Tier 2 source (standards document)')
+        elif source_tier == 'tier3':
+            score += 20
+            reasons.append('Tier 3 source (professional database)')
+        else:
+            # Try to infer tier from source_url
+            source_url = result.get('source_url', '').lower()
+            if any(x in source_url for x in ['.pdf', 'datasheet', 'bohler', 'ssab', 'hardox', 'ovako']):
+                score += 35
+                reasons.append('Tier 1 source inferred (manufacturer PDF)')
+            elif any(x in source_url for x in ['standard', 'din', 'aisi', 'gost', 'jis', 'en10']):
+                score += 25
+                reasons.append('Tier 2 source inferred (standards)')
+            elif any(x in source_url for x in ['matweb.com', 'steelnumber.com', 'key-to-steel']):
+                score += 15
+                reasons.append('Tier 3 source inferred (database)')
+            else:
+                reasons.append('Unknown source tier')
+
+        # Factor 2: Verification sources (30 points max)
+        verification_sources = result.get('verification_sources', [])
+        if isinstance(verification_sources, list):
+            source_count = len(verification_sources)
+            if source_count >= 3:
+                score += 30
+                reasons.append(f'Cross-verified from {source_count} sources')
+            elif source_count == 2:
+                score += 20
+                reasons.append('Verified from 2 sources')
+            elif source_count == 1:
+                score += 10
+                reasons.append('Single source verification')
+
+        # Factor 3: Chemical composition completeness (30 points max)
+        if has_valid_composition:
+            valid_count = result.get('_valid_elements_count', 0)
+            if valid_count >= 7:
+                score += 30
+                reasons.append(f'{valid_count} chemical elements found')
+            elif valid_count >= 4:
+                score += 20
+                reasons.append(f'{valid_count} chemical elements found')
+            elif valid_count >= 1:
+                score += 10
+                reasons.append(f'{valid_count} chemical elements found')
+        else:
+            reasons.append('No valid chemical composition')
+
+        # Determine level
+        if score >= 75:
+            level = 'high'
+        elif score >= 45:
+            level = 'medium'
+        else:
+            level = 'low'
+
+        return {
+            'level': level,
+            'score': min(score, 100),
+            'reasons': reasons
+        }
+
     def _validate_composition(self, result: Dict[str, Any]) -> bool:
         """
         Validate chemical composition values
@@ -452,7 +540,7 @@ class AISearch:
         return self._clean_citation_references(str(analogues).strip())
 
     def _create_prompt(self, grade_name: str) -> str:
-        """Create prompt for OpenAI"""
+        """Create prompt for AI with enhanced confidence tracking"""
         return f"""Find detailed information about steel grade "{grade_name}".
 
 CRITICAL INSTRUCTIONS:
@@ -463,14 +551,11 @@ CRITICAL INSTRUCTIONS:
 5. For analogues, provide only confirmed equivalents from standards (AISI, DIN, JIS, etc.)
 6. If no analogues found, set analogues to null (NOT empty string)
 7. Chemical composition must be realistic (C: 0-5%, other elements: 0-100%)
-8. MANDATORY: Provide source URL with the following priority:
-   a) If found on official manufacturer website -> provide manufacturer product page URL
-   b) If found in standard document -> provide standard document URL
-   c) If found in PDF datasheet -> provide PDF URL
-   d) Otherwise -> provide the most reliable source URL you found
+8. MANDATORY: Provide source URLs and indicate source tier for confidence scoring
 9. Include manufacturer name and country for proprietary grades
 10. IMPORTANT: Provide "application" and "properties" fields in RUSSIAN language (На русском языке)
 11. Do NOT include citation references like [1], [2], [3] in your response - provide clean text only
+12. NEW: Provide verification_sources array with all sources you used (for confidence scoring)
 
 Provide the following information in JSON format:
 {{
@@ -497,12 +582,19 @@ Provide the following information in JSON format:
     "properties": "key properties IN RUSSIAN (e.g., Низкоуглеродистая сталь с твердостью около 500 HBW; изгибаемая и свариваемая; высокая износостойкость)",
     "manufacturer": "manufacturer name if it's a proprietary grade",
     "manufacturer_country": "manufacturer country (e.g., Австрия, США, Германия, Франция, Швеция, Япония, Россия)",
-    "source_url": "MANDATORY: URL to the source (manufacturer website > standard > PDF > other reliable source)"
+    "source_url": "MANDATORY: URL to the source (manufacturer website > standard > PDF > other reliable source)",
+    "source_tier": "tier level of primary source: tier1|tier2|tier3 (tier1=manufacturer PDF, tier2=standards, tier3=databases)",
+    "verification_sources": [
+        {{"url": "source1_url", "type": "manufacturer_pdf|standard|database", "verified_fields": ["c", "cr", "mo"]}},
+        {{"url": "source2_url", "type": "manufacturer_pdf|standard|database", "verified_fields": ["c", "cr", "ni"]}}
+    ]
 }}
 
 CRITICAL REQUIREMENTS:
 - If chemical composition is not found or cannot be verified, set "found": false
 - source_url is MANDATORY - always provide the most reliable source URL
+- source_tier is MANDATORY - indicate tier1/tier2/tier3 based on source quality
+- verification_sources is OPTIONAL but RECOMMENDED - list all sources used for cross-verification
 - For proprietary grades, include both manufacturer name and country
 - Only provide factual data from reliable sources. Never invent or estimate values
 - application and properties MUST be in RUSSIAN language
