@@ -1190,13 +1190,7 @@
             }
         }
 
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('fuzzyModal');
-            if (event.target === modal) {
-                closeFuzzyModal();
-            }
-        }
+        // Modal only closes via X button - no backdrop click close
 
         // Helper function to parse element value (handle ranges)
         function parseElementValue(value) {
