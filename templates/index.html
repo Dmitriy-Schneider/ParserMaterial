@@ -287,20 +287,20 @@
         th {
             background: #2196f3;
             color: white;
-            padding: 15px 10px;
+            padding: 10px 4px;
             text-align: left;
             font-weight: 600;
             position: sticky;
             top: 0;
             z-index: 10;
             white-space: nowrap;
-            font-size: 12px;
+            font-size: 11px;
         }
 
         td {
-            padding: 8px 6px;
+            padding: 6px 3px;
             border-bottom: 1px solid #e9ecef;
-            font-size: 11px;
+            font-size: 10px;
             white-space: nowrap;
         }
 
@@ -442,7 +442,7 @@
             margin-left: 5px;
         }
 
-        /* Modal styles */
+        /* Modal styles - Resizable and Draggable */
         .modal {
             display: none;
             position: fixed;
@@ -452,32 +452,44 @@
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.5);
-            overflow: auto;
+            overflow: hidden;
         }
 
         .modal-content {
             background: white;
-            margin: 50px auto;
-            padding: 0;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
             border-radius: 10px;
-            max-width: 1200px;
             width: 90%;
+            max-width: 1400px;
+            height: 80vh;
+            min-width: 800px;
+            min-height: 400px;
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            resize: both;
+            overflow: hidden;
         }
 
         .modal-header {
             background: #ff9800;
             color: white;
-            padding: 20px;
+            padding: 15px 20px;
             border-radius: 10px 10px 0 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            cursor: move;
+            flex-shrink: 0;
         }
 
         .modal-header h2 {
             margin: 0;
-            font-size: 1.5em;
+            font-size: 1.3em;
+            user-select: none;
         }
 
         .modal-close {
@@ -497,54 +509,113 @@
         }
 
         .modal-body {
-            padding: 20px;
-            max-height: 70vh;
-            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
         }
 
         .fuzzy-params {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-            padding: 15px;
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+            margin-bottom: 10px;
+            padding: 10px;
             background: #f8f9fa;
             border-radius: 6px;
+            flex-shrink: 0;
         }
 
         .fuzzy-param {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 3px;
         }
 
         .fuzzy-param label {
             font-weight: 600;
             color: #495057;
-            font-size: 12px;
+            font-size: 11px;
         }
 
         .fuzzy-param input {
-            padding: 8px;
+            padding: 6px 8px;
             border: 2px solid #dee2e6;
-            border-radius: 6px;
-            font-size: 14px;
+            border-radius: 4px;
+            font-size: 13px;
+            width: 100px;
+        }
+
+        .fuzzy-param.description {
+            flex: 1;
+            font-size: 11px;
+            color: #666;
+            padding-bottom: 4px;
         }
 
         .btn-search-similar {
             background: #ff9800;
             color: white;
             border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
+            padding: 8px 16px;
+            border-radius: 4px;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 13px;
             transition: background-color 0.3s;
-            width: 100%;
+            white-space: nowrap;
         }
 
         .btn-search-similar:hover {
             background: #f57c00;
+        }
+
+        .fuzzy-results-container {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .fuzzy-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+        }
+
+        .fuzzy-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            background: white;
+        }
+
+        .fuzzy-table .reference-row {
+            position: sticky;
+            top: 32px;
+            z-index: 1;
+            background: #e3f2fd;
+            border-top: 2px solid #2196f3;
+            border-bottom: 2px solid #2196f3;
+            font-weight: 600;
+        }
+
+        .fuzzy-table th {
+            background: #2196f3;
+            color: white;
+            padding: 8px 4px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 10px;
+            border-bottom: 2px solid #1976d2;
+        }
+
+        .fuzzy-table td {
+            padding: 6px 4px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .fuzzy-table tbody tr:hover {
+            background: #f8f9fa;
         }
 
         .similarity-badge {
@@ -556,34 +627,6 @@
             font-size: 12px;
         }
 
-        .reference-grade-box {
-            background: #e3f2fd;
-            border: 2px solid #2196f3;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-
-        .reference-grade-box h4 {
-            color: #1976d2;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-
-        .reference-composition {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            font-size: 13px;
-        }
-
-        .reference-composition span {
-            background: #2196f3;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-weight: 600;
-        }
 
         .element-diff-good {
             background: #c8e6c9 !important;
@@ -647,8 +690,8 @@
                     <button class="btn-clear-compact" onclick="clearFilters()" title="Clear all filters">Clear</button>
                 </div>
                 <div class="filter-group">
-                    <label>Base:</label>
-                    <select id="baseFilter">
+                    <label>Standard:</label>
+                    <select id="standardFilter">
                         <option value="">Any</option>
                     </select>
                 </div>
@@ -761,26 +804,25 @@
             <table id="steelTable">
                 <thead>
                     <tr>
-                        <th style="min-width: 120px;">Grade</th>
-                        <th style="min-width: 250px;">Analogues</th>
-                        <th style="min-width: 50px;">Base</th>
-                        <th style="min-width: 70px;">C</th>
-                        <th style="min-width: 70px;">Cr</th>
-                        <th style="min-width: 70px;">Mo</th>
-                        <th style="min-width: 70px;">V</th>
-                        <th style="min-width: 70px;">W</th>
-                        <th style="min-width: 70px;">Co</th>
-                        <th style="min-width: 70px;">Ni</th>
-                        <th style="min-width: 70px;">Mn</th>
-                        <th style="min-width: 70px;">Si</th>
-                        <th style="min-width: 70px;">S</th>
-                        <th style="min-width: 70px;">P</th>
-                        <th style="min-width: 70px;">Cu</th>
-                        <th style="min-width: 70px;">Nb</th>
-                        <th style="min-width: 70px;">N</th>
-                        <th style="min-width: 100px;">Other Elements</th>
-                        <th style="min-width: 150px;">Standard</th>
-                        <th style="min-width: 80px;">Actions</th>
+                        <th style="width: 110px;">Grade</th>
+                        <th style="width: 200px;">Analogues</th>
+                        <th style="width: 40px;">C</th>
+                        <th style="width: 40px;">Cr</th>
+                        <th style="width: 40px;">Mo</th>
+                        <th style="width: 40px;">V</th>
+                        <th style="width: 40px;">W</th>
+                        <th style="width: 40px;">Co</th>
+                        <th style="width: 40px;">Ni</th>
+                        <th style="width: 40px;">Mn</th>
+                        <th style="width: 40px;">Si</th>
+                        <th style="width: 40px;">S</th>
+                        <th style="width: 40px;">P</th>
+                        <th style="width: 40px;">Cu</th>
+                        <th style="width: 40px;">Nb</th>
+                        <th style="width: 40px;">N</th>
+                        <th style="width: 80px;">Other</th>
+                        <th style="width: 120px;">Standard</th>
+                        <th style="width: 70px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
@@ -801,17 +843,13 @@
 
     <!-- Fuzzy Search Modal -->
     <div id="fuzzyModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>🔗 Find Similar Grades</h2>
+        <div id="fuzzyModalContent" class="modal-content">
+            <div id="fuzzyModalHeader" class="modal-header">
+                <h2>🔗 Find Similar Grades - <span id="fuzzyRefGradeName"></span></h2>
                 <button class="modal-close" onclick="closeFuzzyModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="fuzzy-params">
-                    <div class="fuzzy-param">
-                        <label>Reference Grade:</label>
-                        <input type="text" id="fuzzyRefGrade" readonly>
-                    </div>
                     <div class="fuzzy-param">
                         <label>Tolerance (%):</label>
                         <input type="number" id="fuzzyTolerance" value="50" min="0" max="100" step="5">
@@ -820,9 +858,12 @@
                         <label>Max Results:</label>
                         <input type="number" id="fuzzyMaxResults" value="10" min="1" max="100">
                     </div>
+                    <div class="fuzzy-param description">
+                        <strong>Tolerance</strong> = максимальное процентное отклонение элементов. Например: эталон C=0.30%, при tolerance 50% → найдет марки с C от 0.15% до 0.60%. Чем ниже tolerance, тем точнее совпадение.
+                    </div>
+                    <button class="btn-search-similar" onclick="performFuzzySearch()">Search</button>
                 </div>
-                <button class="btn-search-similar" onclick="performFuzzySearch()">Search Similar Grades</button>
-                <div id="fuzzyResults" style="margin-top: 20px;"></div>
+                <div id="fuzzyResults" class="fuzzy-results-container"></div>
             </div>
         </div>
     </div>
@@ -833,19 +874,25 @@
         let itemsPerPage = 20;
         let allSteels = [];
 
-        // Load statistics on page load
+        // Load statistics and unique standards on page load
         fetch('/api/stats')
             .then(response => response.json())
             .then(data => {
                 document.getElementById('totalCount').textContent = data.total;
-                // Populate dropdowns
-                data.bases.forEach(base => {
+            });
+
+        // Load unique standards for filter
+        fetch('/api/steels')
+            .then(response => response.json())
+            .then(data => {
+                // Extract unique standards
+                const standards = [...new Set(data.map(s => s.standard).filter(s => s && s !== 'null' && s !== ''))].sort();
+                standards.forEach(standard => {
                     const option = document.createElement('option');
-                    option.value = base;
-                    option.textContent = base;
-                    document.getElementById('baseFilter').appendChild(option);
+                    option.value = standard;
+                    option.textContent = standard;
+                    document.getElementById('standardFilter').appendChild(option);
                 });
-                // techFilter removed - no longer used
             });
 
         // Search function
@@ -867,10 +914,8 @@
                 }
             }
 
-            const base = document.getElementById('baseFilter').value;
-            if (base) params.append('base', base);
-
-            // techFilter removed - no longer used
+            const standard = document.getElementById('standardFilter').value;
+            if (standard) params.append('standard', standard);
 
             // Add element filters
             const elements = ['c', 'cr', 'mo', 'v', 'w', 'co', 'ni', 'mn', 'si', 's', 'p', 'cu', 'nb', 'n'];
@@ -929,25 +974,13 @@
                 // Standard column
                 let standardCell = steel.standard || '';
 
-                // Actions column
-                let actionsCell = '';
-                if (isAI) {
-                    actionsCell = `
-                        <button class="btn-save" onclick="saveSteelToDB('${steel.grade}')">Save</button>
-                        <button class="btn-fuzzy" onclick='openFuzzyModal(${JSON.stringify(steel)})'>Similar</button>
-                    `;
-                } else {
-                    actionsCell = `
-                        <button class="btn-delete" onclick="deleteSteelFromDB('${steel.grade}')">Delete</button>
-                        <button class="btn-fuzzy" onclick='openFuzzyModal(${JSON.stringify(steel)})'>Similar</button>
-                    `;
-                }
+                // Actions column - only Similar button
+                let actionsCell = `<button class="btn-fuzzy" onclick='openFuzzyModal(${JSON.stringify(steel)})'>Similar</button>`;
 
                 return `
                 <tr>
                     <td>${gradeCell}</td>
-                    <td style="max-width: 300px; white-space: normal;">${analoguesCell}</td>
-                    <td>${steel.base || ''}</td>
+                    <td style="max-width: 200px; white-space: normal; overflow: hidden; text-overflow: ellipsis;">${analoguesCell}</td>
                     <td>${steel.c || ''}</td>
                     <td>${steel.cr || ''}</td>
                     <td>${steel.mo || ''}</td>
@@ -962,7 +995,7 @@
                     <td>${steel.cu || ''}</td>
                     <td>${steel.nb || ''}</td>
                     <td>${steel.n || ''}</td>
-                    <td>${steel.other_elements || ''}</td>
+                    <td style="max-width: 80px; overflow: hidden; text-overflow: ellipsis;">${steel.other_elements || ''}</td>
                     <td>${standardCell}</td>
                     <td>${actionsCell}</td>
                 </tr>
@@ -1076,15 +1109,14 @@
         // Clear all filters
         function clearFilters() {
             document.getElementById('gradeFilter').value = '';
-            document.getElementById('baseFilter').value = '';
-            // techFilter removed - no longer used
-            
+            document.getElementById('standardFilter').value = '';
+
             const elements = ['c', 'cr', 'mo', 'v', 'w', 'co', 'ni', 'mn', 'si', 's', 'p', 'cu', 'nb', 'n'];
             elements.forEach(element => {
                 document.getElementById(element + '_min').value = '';
                 document.getElementById(element + '_max').value = '';
             });
-            
+
             searchSteels();
         }
 
@@ -1105,14 +1137,57 @@
 
         function openFuzzyModal(steel) {
             currentRefSteel = steel;
-            document.getElementById('fuzzyRefGrade').value = steel.grade;
+            document.getElementById('fuzzyRefGradeName').textContent = steel.grade;
             document.getElementById('fuzzyResults').innerHTML = '';
             document.getElementById('fuzzyModal').style.display = 'block';
+            initModalDrag();
         }
 
         function closeFuzzyModal() {
             document.getElementById('fuzzyModal').style.display = 'none';
             currentRefSteel = null;
+        }
+
+        // Make modal draggable
+        function initModalDrag() {
+            const modal = document.getElementById('fuzzyModalContent');
+            const header = document.getElementById('fuzzyModalHeader');
+            let isDragging = false;
+            let currentX;
+            let currentY;
+            let initialX;
+            let initialY;
+            let xOffset = 0;
+            let yOffset = 0;
+
+            header.addEventListener('mousedown', dragStart);
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', dragEnd);
+
+            function dragStart(e) {
+                initialX = e.clientX - xOffset;
+                initialY = e.clientY - yOffset;
+                if (e.target === header || e.target.tagName === 'H2' || e.target.tagName === 'SPAN') {
+                    isDragging = true;
+                }
+            }
+
+            function drag(e) {
+                if (isDragging) {
+                    e.preventDefault();
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+                    xOffset = currentX;
+                    yOffset = currentY;
+                    modal.style.transform = `translate(calc(-50% + ${currentX}px), calc(-50% + ${currentY}px))`;
+                }
+            }
+
+            function dragEnd(e) {
+                initialX = currentX;
+                initialY = currentY;
+                isDragging = false;
+            }
         }
 
         // Close modal when clicking outside
@@ -1202,50 +1277,44 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success && data.results.length > 0) {
-                    // Build reference composition display
-                    const refElements = ['c', 'cr', 'mo', 'ni', 'mn', 'si', 'v', 'w'];
-                    let refComposition = '';
-                    refElements.forEach(elem => {
-                        const value = currentRefSteel[elem];
-                        if (value && value !== '' && value !== 'null' && value !== '0' && value !== '0.00') {
-                            refComposition += `<span>${elem.toUpperCase()}: ${value}%</span>`;
-                        }
-                    });
-
-                    // Display reference grade at the top
+                    // Create table with pinned reference row (like Excel)
                     let html = `
-                        <div class="reference-grade-box">
-                            <h4>📍 Эталонная марка: ${data.reference_grade}</h4>
-                            <div class="reference-composition">
-                                ${refComposition || '<span style="background: #999;">Нет данных о составе</span>'}
-                            </div>
-                        </div>
-                        <h3>Found ${data.found_count} similar grade${data.found_count > 1 ? 's' : ''}</h3>
-                        <p style="color: #666; font-size: 12px; margin-bottom: 10px;">
-                            Tolerance: ${data.tolerance}% |
-                            <span style="display: inline-block; width: 15px; height: 15px; background: #c8e6c9; border-radius: 3px; vertical-align: middle;"></span> ≤15% diff |
-                            <span style="display: inline-block; width: 15px; height: 15px; background: #fff9c4; border-radius: 3px; vertical-align: middle;"></span> 15-40% diff |
-                            <span style="display: inline-block; width: 15px; height: 15px; background: #ffcdd2; border-radius: 3px; vertical-align: middle;"></span> >40% diff
-                        </p>
-                        <div class="table-container" style="max-height: 400px;">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Grade</th>
-                                        <th>Similarity</th>
-                                        <th>C</th>
-                                        <th>Cr</th>
-                                        <th>Mo</th>
-                                        <th>Ni</th>
-                                        <th>Mn</th>
-                                        <th>Si</th>
-                                        <th>Standard</th>
-                                        <th>Analogues</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
+                        <table class="fuzzy-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 100px;">Grade</th>
+                                    <th style="width: 60px;">Similarity</th>
+                                    <th style="width: 50px;">C</th>
+                                    <th style="width: 50px;">Cr</th>
+                                    <th style="width: 50px;">Mo</th>
+                                    <th style="width: 50px;">Ni</th>
+                                    <th style="width: 50px;">Mn</th>
+                                    <th style="width: 50px;">Si</th>
+                                    <th style="width: 80px;">V</th>
+                                    <th style="width: 80px;">W</th>
+                                    <th style="width: 120px;">Standard</th>
+                                    <th>Analogues</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Pinned reference row -->
+                                <tr class="reference-row">
+                                    <td><strong>📍 ${data.reference_grade}</strong></td>
+                                    <td style="text-align: center;"><strong>Reference</strong></td>
+                                    <td><strong>${currentRefSteel.c || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.cr || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.mo || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.ni || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.mn || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.si || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.v || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.w || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.standard || '-'}</strong></td>
+                                    <td style="font-size: 10px;">${(currentRefSteel.analogues || '').replace(/\*/g, ' ')}</td>
+                                </tr>
                     `;
 
+                    // Add similar grades
                     data.results.forEach(result => {
                         let gradeCell = result.grade;
                         if (result.link) {
@@ -1256,14 +1325,14 @@
                         let analoguesCell = (result.analogues || '').replace(/\*/g, ' ');
 
                         // Compare elements and highlight differences
-                        const elements = ['c', 'cr', 'mo', 'ni', 'mn', 'si'];
+                        const elements = ['c', 'cr', 'mo', 'ni', 'mn', 'si', 'v', 'w'];
                         let elementCells = {};
 
                         elements.forEach(elem => {
                             const refVal = parseElementValue(currentRefSteel[elem]);
                             const candVal = parseElementValue(result[elem]);
                             const diff = calculateDifference(refVal, candVal);
-                            const displayValue = result[elem] || '';
+                            const displayValue = result[elem] || '-';
 
                             if (refVal !== null || candVal !== null) {
                                 const diffClass = getDiffClass(diff);
@@ -1277,23 +1346,24 @@
                         html += `
                             <tr>
                                 <td>${gradeCell}</td>
-                                <td><span class="similarity-badge">${result.similarity}%</span></td>
+                                <td style="text-align: center;"><span class="similarity-badge">${result.similarity}%</span></td>
                                 ${elementCells['c']}
                                 ${elementCells['cr']}
                                 ${elementCells['mo']}
                                 ${elementCells['ni']}
                                 ${elementCells['mn']}
                                 ${elementCells['si']}
-                                <td>${result.standard || ''}</td>
-                                <td style="max-width: 200px; white-space: normal;">${analoguesCell}</td>
+                                ${elementCells['v']}
+                                ${elementCells['w']}
+                                <td>${result.standard || '-'}</td>
+                                <td style="max-width: 250px; white-space: normal; overflow: hidden; text-overflow: ellipsis;">${analoguesCell}</td>
                             </tr>
                         `;
                     });
 
                     html += `
-                                </tbody>
-                            </table>
-                        </div>
+                            </tbody>
+                        </table>
                     `;
 
                     resultsDiv.innerHTML = html;

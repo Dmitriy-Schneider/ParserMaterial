@@ -33,12 +33,11 @@ def get_steels():
     # Get filter parameters
     grade_filter = request.args.get('grade', '').strip()
     exact_search = request.args.get('exact', 'false').lower() == 'true'
-    base_filter = request.args.get('base', '').strip()
+    standard_filter = request.args.get('standard', '').strip()
 
     # AI Search enabled ONLY for explicit request from Telegram Bot
     # Web Exact Search (🔍) searches ONLY in database (exact match, no AI fallback)
     use_ai = request.args.get('ai', 'false').lower() == 'true'
-    # tech_filter removed - no longer used
     
     # Element filters
     element_filters = {}
@@ -64,12 +63,10 @@ def get_steels():
         else:
             query += " AND grade LIKE ?"
             params.append(f'%{grade_filter}%')
-    
-    if base_filter:
-        query += " AND base = ?"
-        params.append(base_filter)
-    
-    # tech_filter removed - no longer used
+
+    if standard_filter:
+        query += " AND standard = ?"
+        params.append(standard_filter)
     
     # Apply element filters with proper range handling
     for element, values in element_filters.items():
@@ -336,10 +333,6 @@ def get_stats():
         cursor.execute("SELECT COUNT(*) FROM steel_grades")
         total = cursor.fetchone()[0]
 
-        # Get unique values for dropdowns
-        cursor.execute("SELECT DISTINCT base FROM steel_grades WHERE base IS NOT NULL")
-        bases = [row[0] for row in cursor.fetchall()]
-
         # Check AI cache stats
         ai_cached = 0
         try:
@@ -348,11 +341,8 @@ def get_stats():
         except:
             pass
 
-        # techs removed - no longer used
-
         return jsonify({
             'total': total,
-            'bases': bases,
             'ai_enabled': ai_search.enabled,
             'ai_cached_searches': ai_cached
         })
