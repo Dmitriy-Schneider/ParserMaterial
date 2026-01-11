@@ -62,6 +62,16 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await analogues.analogues_command(update, context)
         return
 
+    elif intent == 'fuzzy_search' and grade:
+        # Import fuzzy_search handler
+        from . import fuzzy_search
+        # Manually set args for fuzzy_search command
+        tolerance = analysis.get('tolerance') or 50
+        max_results = analysis.get('max_results') or 1
+        context.args = [grade, str(tolerance), str(max_results)]
+        await fuzzy_search.fuzzy_search_command(update, context)
+        return
+
     # Default: search
     # Use extracted grade or original message
     search_query = grade if grade else message_text

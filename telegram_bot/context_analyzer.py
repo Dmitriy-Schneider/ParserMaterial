@@ -51,25 +51,34 @@ User message: "{message_text}"
 
 Possible intents:
 1. "search" - user wants to search for a steel grade (by name or chemical composition)
-2. "analogues" - user wants to find equivalent/analogue grades
-3. "stats" - user wants database statistics
-4. "help" - user needs help or unclear request
-5. "unknown" - cannot determine intent
+2. "analogues" - user wants to find equivalent/analogue grades (official analogues from database)
+3. "fuzzy_search" - user wants to find SIMILAR grades by chemical composition (похожая, схожая, найди похожую)
+4. "stats" - user wants database statistics
+5. "help" - user needs help or unclear request
+6. "unknown" - cannot determine intent
 
-If intent is "search" or "analogues", extract the steel grade name mentioned.
+For "fuzzy_search" intent, extract:
+- grade: steel grade name
+- tolerance: percentage value (if mentioned with %, otherwise null). Default is 50%.
+- max_results: number after tolerance (if mentioned, otherwise null). Default is 1.
 
 Examples:
 - "найди 420" → intent: search, grade: 420
 - "аналоги D2" → intent: analogues, grade: D2
+- "похожая марка HARDOX 500" → intent: fuzzy_search, grade: HARDOX 500, tolerance: null, max_results: null
+- "найди похожую HARDOX 500 30%" → intent: fuzzy_search, grade: HARDOX 500, tolerance: 30, max_results: null
+- "схожая 4140 50% 10" → intent: fuzzy_search, grade: 4140, tolerance: 50, max_results: 10
+- "похожие марки на D2 25% 5" → intent: fuzzy_search, grade: D2, tolerance: 25, max_results: 5
 - "что такое Bohler K340" → intent: search, grade: Bohler K340
 - "сколько марок в базе" → intent: stats
 - "помощь" → intent: help
-- "хим состав 1.2379" → intent: search, grade: 1.2379
 
 Return ONLY valid JSON:
 {{
-    "intent": "search|analogues|stats|help|unknown",
+    "intent": "search|analogues|fuzzy_search|stats|help|unknown",
     "grade": "extracted grade name or null",
+    "tolerance": number or null,
+    "max_results": number or null,
     "confidence": 0.0-1.0
 }}"""
 
@@ -126,6 +135,8 @@ Return ONLY valid JSON:
             return {
                 'intent': 'stats',
                 'grade': None,
+                'tolerance': None,
+                'max_results': None,
                 'confidence': 0.8
             }
 
@@ -134,7 +145,47 @@ Return ONLY valid JSON:
             return {
                 'intent': 'help',
                 'grade': None,
+                'tolerance': None,
+                'max_results': None,
                 'confidence': 0.8
+            }
+
+        # Check for fuzzy search keywords
+        fuzzy_keywords = ['похожая', 'похожий', 'похожую', 'схожая', 'схожий', 'схожую', 'similar', 'найди похож', 'найди схож']
+        if any(keyword in message_lower for keyword in fuzzy_keywords):
+            # Extract grade name and parameters
+            import re
+            # Remove fuzzy keywords
+            text = message_lower
+            for keyword in fuzzy_keywords:
+                text = text.replace(keyword, ' ')
+            text = text.replace('марк', '').replace('на', '').strip()
+
+            # Extract tolerance (number with %)
+            tolerance = None
+            tolerance_match = re.search(r'(\d+)\s*%', text)
+            if tolerance_match:
+                tolerance = int(tolerance_match.group(1))
+                text = text.replace(tolerance_match.group(0), '').strip()
+
+            # Extract max_results (number after tolerance)
+            max_results = None
+            numbers = re.findall(r'\b(\d+)\b', text)
+            if numbers:
+                max_results = int(numbers[-1]) if len(numbers) > 0 else None
+                # Remove the last number from text
+                if max_results:
+                    text = re.sub(r'\b' + str(max_results) + r'\b', '', text, count=1).strip()
+
+            # Remaining text is grade name
+            grade = text.strip()
+
+            return {
+                'intent': 'fuzzy_search',
+                'grade': grade if grade else None,
+                'tolerance': tolerance,
+                'max_results': max_results,
+                'confidence': 0.7
             }
 
         # Check for analogues keywords
@@ -148,6 +199,8 @@ Return ONLY valid JSON:
                         return {
                             'intent': 'analogues',
                             'grade': grade if grade else None,
+                            'tolerance': None,
+                            'max_results': None,
                             'confidence': 0.6
                         }
 
@@ -156,6 +209,8 @@ Return ONLY valid JSON:
         return {
             'intent': 'search',
             'grade': message_text.strip(),
+            'tolerance': None,
+            'max_results': None,
             'confidence': 0.5
         }
 
