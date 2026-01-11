@@ -691,9 +691,7 @@
                 </div>
                 <div class="filter-group">
                     <label>Standard:</label>
-                    <select id="standardFilter">
-                        <option value="">Any</option>
-                    </select>
+                    <input type="text" id="standardFilter" placeholder="GOST, AISI, DIN, Bohler...">
                 </div>
             </div>
 
@@ -881,19 +879,7 @@
                 document.getElementById('totalCount').textContent = data.total;
             });
 
-        // Load unique standards for filter
-        fetch('/api/steels')
-            .then(response => response.json())
-            .then(data => {
-                // Extract unique standards
-                const standards = [...new Set(data.map(s => s.standard).filter(s => s && s !== 'null' && s !== ''))].sort();
-                standards.forEach(standard => {
-                    const option = document.createElement('option');
-                    option.value = standard;
-                    option.textContent = standard;
-                    document.getElementById('standardFilter').appendChild(option);
-                });
-            });
+        // Standard filter is now a text input with partial search (no need to load dropdown options)
 
         // Search function
         function searchSteels(exactSearch = false, useAI = false) {

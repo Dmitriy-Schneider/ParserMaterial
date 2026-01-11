@@ -65,8 +65,8 @@ def get_steels():
             params.append(f'%{grade_filter}%')
 
     if standard_filter:
-        query += " AND standard = ?"
-        params.append(standard_filter)
+        query += " AND standard LIKE ?"
+        params.append(f'%{standard_filter}%')
     
     # Apply element filters with proper range handling
     for element, values in element_filters.items():
