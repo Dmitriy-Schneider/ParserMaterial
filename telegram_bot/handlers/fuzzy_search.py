@@ -62,7 +62,7 @@ async def perform_fuzzy_search(update: Update, grade_name: str, tolerance: float
             parse_mode='Markdown'
         )
 
-        # First, get the reference grade data
+        # First, try to get reference grade from database
         response = requests.get(
             config.SEARCH_ENDPOINT,
             params={'grade': grade_name, 'exact': 'true'},
@@ -77,15 +77,33 @@ async def perform_fuzzy_search(update: Update, grade_name: str, tolerance: float
 
         results = response.json()
 
+        # If not found in database, try AI Search
         if not results or len(results) == 0:
             await status_msg.edit_text(
-                f"❌ **Марка `{grade_name}` не найдена в базе данных**\n\n"
-                f"Fuzzy Search работает только для марок из базы.\n"
-                f"Попробуйте сначала найти марку через обычный поиск:\n"
-                f"`/search {grade_name}`",
+                f"🔗 Марка `{grade_name}` не найдена в базе...\n\n"
+                f"🤖 Пытаюсь найти через AI Search (Perplexity)...\n\n"
+                f"⏳ Пожалуйста, подождите 20-30 сек...",
                 parse_mode='Markdown'
             )
-            return
+
+            # Try AI search
+            ai_response = requests.get(
+                config.SEARCH_ENDPOINT,
+                params={'grade': grade_name, 'ai': 'true'},
+                timeout=60
+            )
+
+            if ai_response.status_code == 200:
+                results = ai_response.json()
+
+            if not results or len(results) == 0:
+                await status_msg.edit_text(
+                    f"❌ **Марка `{grade_name}` не найдена**\n\n"
+                    f"Не найдена ни в базе данных (10,394 марок), ни через AI Search.\n\n"
+                    f"Попробуйте проверить название марки.",
+                    parse_mode='Markdown'
+                )
+                return
 
         # Get reference grade data
         reference_grade = results[0]
@@ -232,17 +250,10 @@ def format_fuzzy_result(result: dict, index: int) -> str:
     if comp_parts:
         lines.append(f"  📊 {', '.join(comp_parts)}")
 
-    # Standard and analogues
+    # Standard only (NO analogues - fuzzy search shows similar grades, not official analogues)
     standard = result.get('standard')
     if standard and standard not in ['null', None, '']:
         lines.append(f"  📋 {standard}")
-
-    analogues = result.get('analogues')
-    if analogues and analogues not in ['null', None, '', 'N/A']:
-        # Truncate if too long
-        if len(analogues) > 100:
-            analogues = analogues[:97] + "..."
-        lines.append(f"  🔗 {analogues}")
 
     # Source link
     source_url = result.get('link')
