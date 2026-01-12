@@ -337,23 +337,10 @@ class AISearch:
                 if composition:
                     print("Extracted chemical composition from PDF using regex")
 
-            # Update result with PDF data (with validation)
+            # Update result with PDF data (with minimal validation - only critical errors)
             if composition:
-                # Define realistic limits for each element (expanded for powder metallurgy & high-speed steels)
-                element_limits = {
-                    'c': (0, 6.0),      # Carbon: 0-6% (CPM steels ~3%, ultra-high carbon)
-                    'n': (0, 5.0),      # Nitrogen: 0-5% (Vanax ~4%, powder steels)
-                    's': (0, 1.0),      # Sulfur: max 1% (free-machining steels)
-                    'p': (0, 1.0),      # Phosphorus: max 1%
-                    'cr': (0, 35),      # Chromium: 0-35%
-                    'ni': (0, 35),      # Nickel: 0-35%
-                    'mo': (0, 20),      # Molybdenum: 0-20% (high-speed steels)
-                    'v': (0, 15),       # Vanadium: 0-15% (CPM 15V ~5%, M2 ~2%)
-                    'w': (0, 25),       # Tungsten: 0-25% (high-speed steels M6 ~20%)
-                    'co': (0, 25),      # Cobalt: 0-25%
-                }
-
-                # Validate and update chemical elements
+                # Minimal validation: only check for CRITICAL errors (not element-specific limits)
+                # This allows special alloys: Ni-base (Inconel 99% Ni), Co-base (Stellite 60% Co), etc.
                 updated_count = 0
                 rejected_count = 0
 
@@ -363,25 +350,33 @@ class AISearch:
 
                         # Validate value
                         try:
-                            # Handle ranges (take midpoint for validation)
+                            # Handle ranges (take max for validation)
                             if '-' in value_str:
                                 parts = value_str.split('-')
-                                val = (float(parts[0]) + float(parts[1])) / 2
+                                val = max(float(parts[0]), float(parts[1]))
                             else:
                                 val = float(value_str.replace(',', '.'))
 
-                            # Check against limits
-                            min_limit, max_limit = element_limits.get(element, (0, 100))
-
-                            if min_limit <= val <= max_limit:
-                                # Value is valid - update
+                            # MINIMAL VALIDATION: Only reject CRITICAL errors
+                            # 1. Negative values (impossible)
+                            # 2. Values > 100% (impossible for single element in %)
+                            # 3. Values > 200 (likely ppm misinterpreted as %, e.g., 200 ppm → 200%)
+                            if val < 0:
+                                print(f"  ✗ REJECTED {element.upper()}: {composition[element]} (negative value impossible)")
+                                rejected_count += 1
+                            elif val > 200:
+                                print(f"  ✗ REJECTED {element.upper()}: {composition[element]} (>200%, likely ppm misinterpreted as %)")
+                                rejected_count += 1
+                            elif val > 100:
+                                # Allow >100% with warning (might be sum of multiple elements or special format)
                                 result[element] = composition[element]
-                                print(f"  ✓ Updated {element.upper()}: {composition[element]} (validated)")
+                                print(f"  ⚠ Updated {element.upper()}: {composition[element]} (WARNING: >100%, verify units)")
                                 updated_count += 1
                             else:
-                                # Value is suspicious - reject
-                                print(f"  ✗ REJECTED {element.upper()}: {composition[element]} (outside {min_limit}-{max_limit}%, likely wrong units)")
-                                rejected_count += 1
+                                # Value looks reasonable - update
+                                result[element] = composition[element]
+                                print(f"  ✓ Updated {element.upper()}: {composition[element]}")
+                                updated_count += 1
 
                         except (ValueError, TypeError) as e:
                             print(f"  ✗ REJECTED {element.upper()}: {composition[element]} (cannot parse)")
@@ -393,7 +388,7 @@ class AISearch:
                     result['pdf_extracted'] = True
                     print(f"PDF enhancement: {updated_count} values updated, {rejected_count} rejected")
                 else:
-                    print(f"PDF enhancement: All {rejected_count} values rejected (suspicious), keeping Perplexity data")
+                    print(f"PDF enhancement: All {rejected_count} values rejected (critical errors), keeping Perplexity data")
 
             return result
 
@@ -524,24 +519,13 @@ class AISearch:
                             print(f"[WARNING] Invalid range for {element}: {value} (min > max) - skipping")
                             continue
 
-                        # Check element-specific realistic limits (expanded for powder metallurgy & high-speed steels)
-                        element_limits = {
-                            'c': (0, 6.0),      # Carbon: 0-6%
-                            'n': (0, 5.0),      # Nitrogen: 0-5% (Vanax ~4%)
-                            's': (0, 1.0),      # Sulfur: max 1%
-                            'p': (0, 1.0),      # Phosphorus: max 1%
-                            'cr': (0, 35),      # Chromium: 0-35%
-                            'ni': (0, 35),      # Nickel: 0-35%
-                            'mo': (0, 20),      # Molybdenum: 0-20%
-                            'v': (0, 15),       # Vanadium: 0-15% (CPM 15V ~5%)
-                            'w': (0, 25),       # Tungsten: 0-25%
-                            'co': (0, 25),      # Cobalt: 0-25%
-                        }
+                        # MINIMAL VALIDATION: Only reject CRITICAL errors (allows special alloys)
+                        if min_val < 0 or max_val < 0:
+                            print(f"[WARNING] Negative value in {element} range: {value} - skipping")
+                            continue
 
-                        min_limit, max_limit = element_limits.get(element, (0, 100))
-
-                        if max_val > max_limit or min_val < min_limit:
-                            print(f"[WARNING] Suspicious {element} range: {value} (should be {min_limit}-{max_limit}%) - likely wrong units (ppm vs %)")
+                        if max_val > 200:
+                            print(f"[WARNING] Suspicious {element} range: {value} (>200%, likely ppm misinterpreted as %)")
                             continue
 
                         valid_elements_found += 1
@@ -549,24 +533,13 @@ class AISearch:
                     # Single value
                     val = float(value_str.replace(',', '.'))
 
-                    # Check element-specific realistic limits (expanded for powder metallurgy & high-speed steels)
-                    element_limits = {
-                        'c': (0, 6.0),      # Carbon: 0-6%
-                        'n': (0, 5.0),      # Nitrogen: 0-5% (Vanax ~4%)
-                        's': (0, 1.0),      # Sulfur: max 1%
-                        'p': (0, 1.0),      # Phosphorus: max 1%
-                        'cr': (0, 35),      # Chromium: 0-35%
-                        'ni': (0, 35),      # Nickel: 0-35%
-                        'mo': (0, 20),      # Molybdenum: 0-20%
-                        'v': (0, 15),       # Vanadium: 0-15% (CPM 15V ~5%)
-                        'w': (0, 25),       # Tungsten: 0-25%
-                        'co': (0, 25),      # Cobalt: 0-25%
-                    }
+                    # MINIMAL VALIDATION: Only reject CRITICAL errors (allows special alloys)
+                    if val < 0:
+                        print(f"[WARNING] Negative {element} value: {value} - skipping")
+                        continue
 
-                    min_limit, max_limit = element_limits.get(element, (0, 100))
-
-                    if val > max_limit or val < min_limit:
-                        print(f"[WARNING] Suspicious {element}: {value} (should be {min_limit}-{max_limit}%) - likely wrong units (ppm vs %)")
+                    if val > 200:
+                        print(f"[WARNING] Suspicious {element}: {value} (>200%, likely ppm misinterpreted as %)")
                         continue
 
                     valid_elements_found += 1
