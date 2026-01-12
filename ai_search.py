@@ -266,11 +266,11 @@ class AISearch:
             # Extract JSON from response
             result = self._parse_ai_response(content, grade_name)
 
-            # DISABLED: PDF enhancement replaced incorrect AI data with wrong parsing
-            # Problem: PDF parser misinterprets units (0.3% → 30%, 0.002% → 200%)
-            # Solution: Trust Perplexity AI to parse sources correctly via its own models
-            # if result and self.pdf_parser:
-            #     result = self._enhance_with_pdf(result, content, grade_name)
+            # ENABLED: Enhanced PDF parsing with "Typical Composition" targeting
+            # Now searches for "Typical Composition" table specifically
+            # Validates values before replacing Perplexity data
+            if result and self.pdf_parser:
+                result = self._enhance_with_pdf(result, content, grade_name)
 
             return result
 
@@ -337,17 +337,63 @@ class AISearch:
                 if composition:
                     print("Extracted chemical composition from PDF using regex")
 
-            # Update result with PDF data
+            # Update result with PDF data (with validation)
             if composition:
-                # Update chemical elements with more accurate PDF data
+                # Define realistic limits for each element
+                element_limits = {
+                    'c': (0, 5.0),      # Carbon: 0-5%
+                    'n': (0, 1.0),      # Nitrogen: 0-1%
+                    's': (0, 0.5),      # Sulfur: max 0.5%
+                    'p': (0, 0.5),      # Phosphorus: max 0.5%
+                    'cr': (0, 35),      # Chromium: 0-35%
+                    'ni': (0, 30),      # Nickel: 0-30%
+                    'mo': (0, 15),      # Molybdenum: 0-15%
+                    'v': (0, 10),       # Vanadium: 0-10%
+                    'w': (0, 20),       # Tungsten: 0-20%
+                    'co': (0, 20),      # Cobalt: 0-20%
+                }
+
+                # Validate and update chemical elements
+                updated_count = 0
+                rejected_count = 0
+
                 for element in ['c', 'cr', 'mo', 'v', 'w', 'co', 'ni', 'mn', 'si', 's', 'p', 'cu', 'nb', 'n', 'ti', 'al']:
                     if element in composition and composition[element]:
-                        result[element] = composition[element]
-                        print(f"  Updated {element.upper()}: {composition[element]}")
+                        value_str = str(composition[element]).strip()
 
-                # Add metadata
-                result['pdf_source'] = pdf_url
-                result['pdf_extracted'] = True
+                        # Validate value
+                        try:
+                            # Handle ranges (take midpoint for validation)
+                            if '-' in value_str:
+                                parts = value_str.split('-')
+                                val = (float(parts[0]) + float(parts[1])) / 2
+                            else:
+                                val = float(value_str.replace(',', '.'))
+
+                            # Check against limits
+                            min_limit, max_limit = element_limits.get(element, (0, 100))
+
+                            if min_limit <= val <= max_limit:
+                                # Value is valid - update
+                                result[element] = composition[element]
+                                print(f"  ✓ Updated {element.upper()}: {composition[element]} (validated)")
+                                updated_count += 1
+                            else:
+                                # Value is suspicious - reject
+                                print(f"  ✗ REJECTED {element.upper()}: {composition[element]} (outside {min_limit}-{max_limit}%, likely wrong units)")
+                                rejected_count += 1
+
+                        except (ValueError, TypeError) as e:
+                            print(f"  ✗ REJECTED {element.upper()}: {composition[element]} (cannot parse)")
+                            rejected_count += 1
+
+                if updated_count > 0:
+                    # Add metadata
+                    result['pdf_source'] = pdf_url
+                    result['pdf_extracted'] = True
+                    print(f"PDF enhancement: {updated_count} values updated, {rejected_count} rejected")
+                else:
+                    print(f"PDF enhancement: All {rejected_count} values rejected (suspicious), keeping Perplexity data")
 
             return result
 

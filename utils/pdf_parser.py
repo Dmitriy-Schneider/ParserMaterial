@@ -300,15 +300,41 @@ class PDFParser:
             Dictionary with chemical elements
         """
         try:
-            # Limit text to first 3000 chars to save tokens
-            text_sample = text[:3000]
+            # Look for "Typical Composition" section first
+            typical_section = None
+            patterns = [
+                r'Typical\s+Composition[\s\S]{0,800}',
+                r'Nominal\s+Composition[\s\S]{0,800}',
+                r'Chemical\s+Composition[\s\S]{0,800}',
+            ]
 
-            prompt = f"""Extract the chemical composition of this steel grade from the following datasheet text.
+            for pattern in patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    typical_section = match.group(0)
+                    print(f"Found section: {pattern}")
+                    break
+
+            # Use typical section if found, otherwise use first 4000 chars
+            text_sample = typical_section if typical_section else text[:4000]
+
+            prompt = f"""Extract the TYPICAL chemical composition from this steel datasheet text.
+
+CRITICAL INSTRUCTIONS:
+1. Look for "Typical Composition" or "Nominal Composition" table
+2. DO NOT use "Chemical Composition Range" (min-max values like 0.30-0.46)
+3. DO NOT use "Heat Analysis" or batch-specific values
+4. Use single typical values (like 0.38%), NOT ranges
+5. All values must be in PERCENT (%), check units carefully
+6. Typical ranges: C: 0.01-3%, Cr: 0-35%, Mo: 0-15%, V: 0-10%, N: 0-1%
+7. If value seems wrong (C>5% or N>1%), it's likely wrong units - DO NOT include it
+8. DO NOT invent values - only extract explicitly stated values
+
 Return ONLY the chemical composition in this exact JSON format:
 {{"c": "value", "cr": "value", "mo": "value", "ni": "value", "mn": "value", "si": "value", ...}}
 
 Use lowercase element symbols. Include only elements that are explicitly mentioned.
-For ranges like "0.60-0.70", keep as is. Use decimal notation (0.65 not 0,65).
+Use decimal notation (0.38 not 0,38). Do NOT include ranges.
 
 Datasheet text:
 {text_sample}
