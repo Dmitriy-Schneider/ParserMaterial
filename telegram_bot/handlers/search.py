@@ -23,7 +23,7 @@ async def search_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     grade_name = ' '.join(context.args)
-    await perform_search(update, grade_name)
+    await perform_search(update, grade_name, context)
 
 
 async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -75,29 +75,41 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Default: search
     # Use extracted grade or original message
     search_query = grade if grade else message_text
-    await perform_search(update, search_query)
+    await perform_search(update, search_query, context)
 
 
-async def perform_search(update: Update, grade_name: str):
-    """Perform steel grade search with AI fallback"""
+async def perform_search(update: Update, grade_name: str, context: ContextTypes.DEFAULT_TYPE = None, force_ai: bool = False):
+    """Perform steel grade search with AI confirmation logic"""
     try:
-        # Send "searching" message with progress indication
+        # Initialize user_data if needed
+        if context and 'search_attempts' not in context.user_data:
+            context.user_data['search_attempts'] = {}
+
+        # Get normalized grade name for tracking attempts
+        normalized_grade = grade_name.strip().upper()
+
+        # Get attempt count for this grade
+        attempt_count = 0
+        if context:
+            attempt_count = context.user_data['search_attempts'].get(normalized_grade, 0)
+
+        # Send "searching" message
         status_msg = await update.message.reply_text(
             f"🔍 Ищу марку `{grade_name}`...\n\n"
-            f"▪️ Проверка в базе данных (10,394 марок)\n"
-            f"▪️ Если не найдено → AI Search через Perplexity (20-30 сек)\n\n"
+            f"▪️ Проверка в базе данных (10,394 марок)\n\n"
             f"⏳ Пожалуйста, подождите...",
             parse_mode='Markdown'
         )
 
-        # Make API request with AI fallback enabled
+        # Make API request WITHOUT AI fallback (search only in DB)
+        # unless force_ai is True
         response = requests.get(
             config.SEARCH_ENDPOINT,
             params={
                 'grade': grade_name,
-                'ai': 'true'  # Enable AI fallback (Perplexity priority)
+                'ai': 'true' if force_ai else 'false'  # AI only if forced
             },
-            timeout=60  # Increased timeout for AI search (Perplexity can take 20-30 sec)
+            timeout=60
         )
 
         if response.status_code != 200:
@@ -112,9 +124,126 @@ async def perform_search(update: Update, grade_name: str):
         await status_msg.delete()
 
         if not results:
-            # Clear "not found" message
+            # Not found in database - handle based on attempt count
+            if context:
+                # Increment attempt count
+                attempt_count += 1
+                context.user_data['search_attempts'][normalized_grade] = attempt_count
+
+            if attempt_count == 1:
+                # First attempt - suggest checking spelling
+                await update.message.reply_text(
+                    f"❌ **Марка `{grade_name}` не найдена в базе данных**\n\n"
+                    f"📋 **Проверьте написание марки и попробуйте еще раз:**\n"
+                    f"• Возможно, опечатка в названии\n"
+                    f"• Попробуйте без пробелов (ШХ15 вместо ШХ 15)\n"
+                    f"• Проверьте регистр (AISI 420 вместо aisi 420)\n"
+                    f"• Уточните производителя или стандарт\n\n"
+                    f"💡 Просто отправьте исправленное название марки.",
+                    parse_mode='Markdown'
+                )
+                return
+
+            elif attempt_count == 2:
+                # Second attempt - offer AI search confirmation
+                keyboard = [
+                    [
+                        InlineKeyboardButton("✅ Подтвердить AI Search", callback_data=f'confirm_ai:{grade_name}'),
+                    ],
+                    [
+                        InlineKeyboardButton("✏️ Попробовать еще раз", callback_data=f'retry_search:{grade_name}')
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+
+                await update.message.reply_text(
+                    f"❌ **Марка `{grade_name}` снова не найдена в базе данных**\n\n"
+                    f"🤔 **Что делать дальше?**\n\n"
+                    f"**Вариант 1:** Подтвердить поиск с помощью нейронной сети (Perplexity AI)\n"
+                    f"  • Займет 20-30 секунд\n"
+                    f"  • Данные могут быть неточными\n"
+                    f"  • Требуется проверка по ссылке\n\n"
+                    f"**Вариант 2:** Попробовать еще раз скорректировать название\n"
+                    f"  • Поиск более точной информации в базе данных\n\n"
+                    f"Выберите действие:",
+                    parse_mode='Markdown',
+                    reply_markup=reply_markup
+                )
+                return
+
+            else:
+                # Third+ attempt - automatic AI search
+                await update.message.reply_text(
+                    f"🔍 Марка `{grade_name}` не найдена в базе данных.\n\n"
+                    f"🤖 **Автоматический поиск через Perplexity AI...**\n\n"
+                    f"⏳ Пожалуйста, подождите 20-30 сек...",
+                    parse_mode='Markdown'
+                )
+
+                # Perform AI search
+                await perform_ai_search(update, grade_name, context)
+                return
+
+        else:
+            # Found in database - reset attempt counter
+            if context and normalized_grade in context.user_data.get('search_attempts', {}):
+                del context.user_data['search_attempts'][normalized_grade]
+
+            # Format and send results
+            for i, result in enumerate(results[:config.MAX_RESULTS_PER_MESSAGE], 1):
+                message = format_steel_result(result, i, len(results))
+                await update.message.reply_text(message, parse_mode='Markdown')
+
+            # If more results exist
+            if len(results) > config.MAX_RESULTS_PER_MESSAGE:
+                await update.message.reply_text(
+                    f"⚠️ Показаны первые {config.MAX_RESULTS_PER_MESSAGE} из {len(results)} результатов."
+                )
+
+    except requests.exceptions.Timeout:
+        await update.message.reply_text(
+            "⏱️ Превышено время ожидания поиска.\n"
+            "Попробуйте позже."
+        )
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ Ошибка: {str(e)}"
+        )
+
+
+async def perform_ai_search(update: Update, grade_name: str, context: ContextTypes.DEFAULT_TYPE = None):
+    """Perform AI search with Perplexity"""
+    try:
+        status_msg = await update.message.reply_text(
+            f"🤖 Ищу марку `{grade_name}` через Perplexity AI...\n\n"
+            f"⏳ Пожалуйста, подождите 20-30 сек...",
+            parse_mode='Markdown'
+        )
+
+        # Make API request with AI enabled
+        response = requests.get(
+            config.SEARCH_ENDPOINT,
+            params={
+                'grade': grade_name,
+                'ai': 'true'
+            },
+            timeout=60
+        )
+
+        if response.status_code != 200:
+            await status_msg.edit_text(
+                f"❌ Ошибка AI поиска: {response.status_code}"
+            )
+            return
+
+        results = response.json()
+
+        # Delete status message
+        await status_msg.delete()
+
+        if not results:
             await update.message.reply_text(
-                f"❌ **Марка `{grade_name}` не найдена**\n\n"
+                f"❌ **Марка `{grade_name}` не найдена даже через AI Search**\n\n"
                 f"Поиск выполнен:\n"
                 f"• ✓ В базе данных (10,394 марок)\n"
                 f"• ✓ Через Perplexity AI (интернет-поиск)\n"
@@ -128,11 +257,15 @@ async def perform_search(update: Update, grade_name: str):
             )
             return
 
+        # Reset attempt counter after successful AI search
+        if context:
+            normalized_grade = grade_name.strip().upper()
+            if normalized_grade in context.user_data.get('search_attempts', {}):
+                del context.user_data['search_attempts'][normalized_grade]
+
         # Format and send results
         for i, result in enumerate(results[:config.MAX_RESULTS_PER_MESSAGE], 1):
             message = format_steel_result(result, i, len(results))
-
-            # Send message without buttons (removed all button functionality)
             await update.message.reply_text(message, parse_mode='Markdown')
 
         # If more results exist
@@ -143,12 +276,12 @@ async def perform_search(update: Update, grade_name: str):
 
     except requests.exceptions.Timeout:
         await update.message.reply_text(
-            "⏱️ Превышено время ожидания поиска (возможно AI обрабатывает запрос).\n"
+            "⏱️ Превышено время ожидания AI поиска.\n"
             "Попробуйте позже."
         )
     except Exception as e:
         await update.message.reply_text(
-            f"❌ Ошибка: {str(e)}"
+            f"❌ Ошибка AI поиска: {str(e)}"
         )
 
 
@@ -247,6 +380,12 @@ def format_steel_result(result: dict, index: int = 1, total: int = 1) -> str:
         else:
             lines.append("⚠️ Данные требуют проверки")
 
+        # CRITICAL WARNING about AI data accuracy
+        lines.append("\n⚠️ **ВАЖНО:** Данные получены через нейронную сеть")
+        lines.append("• Информация может быть неточной или неполной")
+        lines.append("• **Обязательно проверьте данные** по ссылке ниже")
+        lines.append("• Рекомендуем сверить с официальными источниками")
+
     # Add source link if available (for both AI and DB results)
     if source_url and source_url not in ['null', None, '', 'N/A']:
         # Format as Markdown link for cleaner appearance
@@ -263,7 +402,46 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     # Parse callback data
     action, grade_name = query.data.split(':', 1)
 
-    if action == 'add':
+    if action == 'confirm_ai':
+        # User confirmed AI search
+        await query.edit_message_text(
+            f"✅ Подтверждено. Запускаю AI Search для марки `{grade_name}`...",
+            parse_mode='Markdown'
+        )
+
+        # Reset attempt counter and perform AI search
+        normalized_grade = grade_name.strip().upper()
+        if normalized_grade in context.user_data.get('search_attempts', {}):
+            del context.user_data['search_attempts'][normalized_grade]
+
+        # Perform AI search
+        # Create a fake update object for perform_ai_search
+        class FakeMessage:
+            def __init__(self, chat_id):
+                self.chat_id = chat_id
+                self.message_id = None
+
+            async def reply_text(self, text, parse_mode=None):
+                return await query.message.reply_text(text, parse_mode=parse_mode)
+
+        fake_update = type('obj', (object,), {
+            'message': FakeMessage(query.message.chat_id)
+        })()
+
+        await perform_ai_search(fake_update, grade_name, context)
+        return
+
+    elif action == 'retry_search':
+        # User wants to try again - just inform them
+        await query.edit_message_text(
+            f"✏️ Хорошо, попробуйте еще раз.\n\n"
+            f"Отправьте исправленное название марки стали.",
+            parse_mode='Markdown'
+        )
+        # Note: We don't reset the attempt counter - next search will be 3rd attempt (automatic AI)
+        return
+
+    elif action == 'add':
         # Get AI result from cache to add to database
         try:
             # Request API to get full result
