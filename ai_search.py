@@ -266,9 +266,11 @@ class AISearch:
             # Extract JSON from response
             result = self._parse_ai_response(content, grade_name)
 
-            # Try to enhance with PDF data if available
-            if result and self.pdf_parser:
-                result = self._enhance_with_pdf(result, content, grade_name)
+            # DISABLED: PDF enhancement replaced incorrect AI data with wrong parsing
+            # Problem: PDF parser misinterprets units (0.3% → 30%, 0.002% → 200%)
+            # Solution: Trust Perplexity AI to parse sources correctly via its own models
+            # if result and self.pdf_parser:
+            #     result = self._enhance_with_pdf(result, content, grade_name)
 
             return result
 
@@ -476,13 +478,24 @@ class AISearch:
                             print(f"[WARNING] Invalid range for {element}: {value} (min > max) - skipping")
                             continue
 
-                        # Check reasonable limits
-                        if element == 'c' and (max_val > 5.0 or min_val < 0):
-                            print(f"[WARNING] Suspicious carbon range: {value} (should be 0-5%) - skipping")
-                            continue
+                        # Check element-specific realistic limits
+                        element_limits = {
+                            'c': (0, 5.0),      # Carbon: 0-5%
+                            'n': (0, 1.0),      # Nitrogen: 0-1% (NOT 200%!)
+                            's': (0, 0.5),      # Sulfur: max 0.5%
+                            'p': (0, 0.5),      # Phosphorus: max 0.5%
+                            'cr': (0, 35),      # Chromium: 0-35%
+                            'ni': (0, 30),      # Nickel: 0-30%
+                            'mo': (0, 15),      # Molybdenum: 0-15%
+                            'v': (0, 10),       # Vanadium: 0-10%
+                            'w': (0, 20),       # Tungsten: 0-20%
+                            'co': (0, 20),      # Cobalt: 0-20%
+                        }
 
-                        if max_val > 100 or min_val < 0:
-                            print(f"[WARNING] Suspicious {element} range: {value} (should be 0-100%) - skipping")
+                        min_limit, max_limit = element_limits.get(element, (0, 100))
+
+                        if max_val > max_limit or min_val < min_limit:
+                            print(f"[WARNING] Suspicious {element} range: {value} (should be {min_limit}-{max_limit}%) - likely wrong units (ppm vs %)")
                             continue
 
                         valid_elements_found += 1
@@ -490,13 +503,24 @@ class AISearch:
                     # Single value
                     val = float(value_str.replace(',', '.'))
 
-                    # Check reasonable limits
-                    if element == 'c' and (val > 5.0 or val < 0):
-                        print(f"[WARNING] Suspicious carbon: {value} (should be 0-5%) - skipping")
-                        continue
+                    # Check element-specific realistic limits (same as for ranges)
+                    element_limits = {
+                        'c': (0, 5.0),      # Carbon: 0-5%
+                        'n': (0, 1.0),      # Nitrogen: 0-1% (NOT 200%!)
+                        's': (0, 0.5),      # Sulfur: max 0.5%
+                        'p': (0, 0.5),      # Phosphorus: max 0.5%
+                        'cr': (0, 35),      # Chromium: 0-35%
+                        'ni': (0, 30),      # Nickel: 0-30%
+                        'mo': (0, 15),      # Molybdenum: 0-15%
+                        'v': (0, 10),       # Vanadium: 0-10%
+                        'w': (0, 20),       # Tungsten: 0-20%
+                        'co': (0, 20),      # Cobalt: 0-20%
+                    }
 
-                    if val > 100 or val < 0:
-                        print(f"[WARNING] Suspicious {element}: {value} (should be 0-100%) - skipping")
+                    min_limit, max_limit = element_limits.get(element, (0, 100))
+
+                    if val > max_limit or val < min_limit:
+                        print(f"[WARNING] Suspicious {element}: {value} (should be {min_limit}-{max_limit}%) - likely wrong units (ppm vs %)")
                         continue
 
                     valid_elements_found += 1
@@ -564,17 +588,23 @@ CRITICAL INSTRUCTIONS:
 5. For analogues, provide only confirmed equivalents from standards (AISI, DIN, JIS, etc.)
 6. If no analogues found, set analogues to null (NOT empty string)
 7. Chemical composition must be realistic (C: 0-5%, other elements: 0-100%)
-8. Include manufacturer name and country for proprietary grades
-9. IMPORTANT: Provide "application" and "properties" fields in RUSSIAN language (На русском языке)
-10. Do NOT include citation references like [1], [2], [3] in your response - provide clean text only
+8. CRITICAL: All composition values must be in PERCENT (%), NOT ppm or mg/kg
+9. CRITICAL: Verify units before extracting - common errors:
+   - 0.30% is CORRECT (not 30% or 300 ppm)
+   - 0.002% is CORRECT (not 2% or 200% or 20 ppm)
+   - Typical ranges: C: 0.01-3.0%, Cr: 0.1-30%, Ni: 0.1-25%, Mo: 0.1-10%, V: 0.01-5%, N: 0.001-0.5%
+   - If you see C > 5% or N > 1% - you likely misinterpreted units (check if it's ppm/mg/kg, not %)
+10. Include manufacturer name and country for proprietary grades
+11. IMPORTANT: Provide "application" and "properties" fields in RUSSIAN language (На русском языке)
+12. Do NOT include citation references like [1], [2], [3] in your response - provide clean text only
 
 SOURCE_URL REQUIREMENTS (VERY IMPORTANT):
-11. source_url MUST be the EXACT page (HTML or PDF) where you FOUND THE CHEMICAL COMPOSITION
-12. Acceptable: manufacturer datasheet PDF, product HTML page with composition table, database entry
-13. NOT acceptable: welding materials, processing guides, certificates, accessories, general info pages
-14. VERIFY the URL you provide actually shows chemical composition when opened
-15. If multiple URLs have composition, choose: manufacturer datasheet PDF > product page HTML > database
-16. Provide source_tier (tier1/tier2/tier3) and verification_sources array for transparency
+13. source_url MUST be the EXACT page (HTML or PDF) where you FOUND THE CHEMICAL COMPOSITION
+14. Acceptable: manufacturer datasheet PDF, product HTML page with composition table, database entry
+15. NOT acceptable: welding materials, processing guides, certificates, accessories, general info pages
+16. VERIFY the URL you provide actually shows chemical composition when opened
+17. If multiple URLs have composition, choose: manufacturer datasheet PDF > product page HTML > database
+18. Provide source_tier (tier1/tier2/tier3) and verification_sources array for transparency
 
 Provide the following information in JSON format:
 {{
