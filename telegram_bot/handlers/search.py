@@ -86,7 +86,8 @@ async def perform_search(update: Update, grade_name: str, context: ContextTypes.
             context.user_data['search_attempts'] = {}
 
         # Get normalized grade name for tracking attempts
-        normalized_grade = grade_name.strip().upper()
+        # Remove ALL spaces, hyphens, dots to track similar grade names as same attempt
+        normalized_grade = grade_name.strip().replace(' ', '').replace('-', '').replace('.', '').upper()
 
         # Get attempt count for this grade
         attempt_count = 0
@@ -259,7 +260,7 @@ async def perform_ai_search(update: Update, grade_name: str, context: ContextTyp
 
         # Reset attempt counter after successful AI search
         if context:
-            normalized_grade = grade_name.strip().upper()
+            normalized_grade = grade_name.strip().replace(' ', '').replace('-', '').replace('.', '').upper()
             if normalized_grade in context.user_data.get('search_attempts', {}):
                 del context.user_data['search_attempts'][normalized_grade]
 
@@ -410,7 +411,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         )
 
         # Reset attempt counter and perform AI search
-        normalized_grade = grade_name.strip().upper()
+        normalized_grade = grade_name.strip().replace(' ', '').replace('-', '').replace('.', '').upper()
         if normalized_grade in context.user_data.get('search_attempts', {}):
             del context.user_data['search_attempts'][normalized_grade]
 
