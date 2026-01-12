@@ -339,18 +339,18 @@ class AISearch:
 
             # Update result with PDF data (with validation)
             if composition:
-                # Define realistic limits for each element
+                # Define realistic limits for each element (expanded for powder metallurgy & high-speed steels)
                 element_limits = {
-                    'c': (0, 5.0),      # Carbon: 0-5%
-                    'n': (0, 1.0),      # Nitrogen: 0-1%
-                    's': (0, 0.5),      # Sulfur: max 0.5%
-                    'p': (0, 0.5),      # Phosphorus: max 0.5%
+                    'c': (0, 6.0),      # Carbon: 0-6% (CPM steels ~3%, ultra-high carbon)
+                    'n': (0, 5.0),      # Nitrogen: 0-5% (Vanax ~4%, powder steels)
+                    's': (0, 1.0),      # Sulfur: max 1% (free-machining steels)
+                    'p': (0, 1.0),      # Phosphorus: max 1%
                     'cr': (0, 35),      # Chromium: 0-35%
-                    'ni': (0, 30),      # Nickel: 0-30%
-                    'mo': (0, 15),      # Molybdenum: 0-15%
-                    'v': (0, 10),       # Vanadium: 0-10%
-                    'w': (0, 20),       # Tungsten: 0-20%
-                    'co': (0, 20),      # Cobalt: 0-20%
+                    'ni': (0, 35),      # Nickel: 0-35%
+                    'mo': (0, 20),      # Molybdenum: 0-20% (high-speed steels)
+                    'v': (0, 15),       # Vanadium: 0-15% (CPM 15V ~5%, M2 ~2%)
+                    'w': (0, 25),       # Tungsten: 0-25% (high-speed steels M6 ~20%)
+                    'co': (0, 25),      # Cobalt: 0-25%
                 }
 
                 # Validate and update chemical elements
@@ -524,18 +524,18 @@ class AISearch:
                             print(f"[WARNING] Invalid range for {element}: {value} (min > max) - skipping")
                             continue
 
-                        # Check element-specific realistic limits
+                        # Check element-specific realistic limits (expanded for powder metallurgy & high-speed steels)
                         element_limits = {
-                            'c': (0, 5.0),      # Carbon: 0-5%
-                            'n': (0, 1.0),      # Nitrogen: 0-1% (NOT 200%!)
-                            's': (0, 0.5),      # Sulfur: max 0.5%
-                            'p': (0, 0.5),      # Phosphorus: max 0.5%
+                            'c': (0, 6.0),      # Carbon: 0-6%
+                            'n': (0, 5.0),      # Nitrogen: 0-5% (Vanax ~4%)
+                            's': (0, 1.0),      # Sulfur: max 1%
+                            'p': (0, 1.0),      # Phosphorus: max 1%
                             'cr': (0, 35),      # Chromium: 0-35%
-                            'ni': (0, 30),      # Nickel: 0-30%
-                            'mo': (0, 15),      # Molybdenum: 0-15%
-                            'v': (0, 10),       # Vanadium: 0-10%
-                            'w': (0, 20),       # Tungsten: 0-20%
-                            'co': (0, 20),      # Cobalt: 0-20%
+                            'ni': (0, 35),      # Nickel: 0-35%
+                            'mo': (0, 20),      # Molybdenum: 0-20%
+                            'v': (0, 15),       # Vanadium: 0-15% (CPM 15V ~5%)
+                            'w': (0, 25),       # Tungsten: 0-25%
+                            'co': (0, 25),      # Cobalt: 0-25%
                         }
 
                         min_limit, max_limit = element_limits.get(element, (0, 100))
@@ -549,18 +549,18 @@ class AISearch:
                     # Single value
                     val = float(value_str.replace(',', '.'))
 
-                    # Check element-specific realistic limits (same as for ranges)
+                    # Check element-specific realistic limits (expanded for powder metallurgy & high-speed steels)
                     element_limits = {
-                        'c': (0, 5.0),      # Carbon: 0-5%
-                        'n': (0, 1.0),      # Nitrogen: 0-1% (NOT 200%!)
-                        's': (0, 0.5),      # Sulfur: max 0.5%
-                        'p': (0, 0.5),      # Phosphorus: max 0.5%
+                        'c': (0, 6.0),      # Carbon: 0-6%
+                        'n': (0, 5.0),      # Nitrogen: 0-5% (Vanax ~4%)
+                        's': (0, 1.0),      # Sulfur: max 1%
+                        'p': (0, 1.0),      # Phosphorus: max 1%
                         'cr': (0, 35),      # Chromium: 0-35%
-                        'ni': (0, 30),      # Nickel: 0-30%
-                        'mo': (0, 15),      # Molybdenum: 0-15%
-                        'v': (0, 10),       # Vanadium: 0-10%
-                        'w': (0, 20),       # Tungsten: 0-20%
-                        'co': (0, 20),      # Cobalt: 0-20%
+                        'ni': (0, 35),      # Nickel: 0-35%
+                        'mo': (0, 20),      # Molybdenum: 0-20%
+                        'v': (0, 15),       # Vanadium: 0-15% (CPM 15V ~5%)
+                        'w': (0, 25),       # Tungsten: 0-25%
+                        'co': (0, 25),      # Cobalt: 0-25%
                     }
 
                     min_limit, max_limit = element_limits.get(element, (0, 100))

@@ -35,6 +35,13 @@ def get_steels():
     exact_search = request.args.get('exact', 'false').lower() == 'true'
     standard_filter = request.args.get('standard', '').strip()
 
+    # Normalize grade name for fuzzy matching (remove spaces, hyphens, dots)
+    # Example: "ШХ 15" → "ШХ15", "X-30" → "X30", "1.2379" → "12379"
+    def normalize_grade_name(name):
+        if not name:
+            return name
+        return name.replace(' ', '').replace('-', '').replace('.', '').upper()
+
     # AI Search enabled ONLY for explicit request from Telegram Bot
     # Web Exact Search (🔍) searches ONLY in database (exact match, no AI fallback)
     use_ai = request.args.get('ai', 'false').lower() == 'true'
@@ -58,8 +65,15 @@ def get_steels():
     
     if grade_filter:
         if exact_search:
-            query += " AND grade = ?"
+            # Exact search with normalization: search both exact match and normalized match
+            # This allows "ШХ 15" to find "ШХ15" and vice versa
+            normalized_input = normalize_grade_name(grade_filter)
+            query += """ AND (
+                grade = ? OR
+                REPLACE(REPLACE(REPLACE(UPPER(grade), ' ', ''), '-', ''), '.', '') = ?
+            )"""
             params.append(grade_filter)
+            params.append(normalized_input)
         else:
             query += " AND grade LIKE ?"
             params.append(f'%{grade_filter}%')
