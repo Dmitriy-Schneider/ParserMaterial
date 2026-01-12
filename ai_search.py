@@ -77,11 +77,11 @@ class AISearch:
         if not self.enabled:
             return None
 
-        # Check cache first (TTL: 7 days)
-        cached_result = self._get_from_cache(grade_name)
-        if cached_result:
-            print(f"[CACHE] Found cached result for '{grade_name}' (age: {cached_result.get('cache_age', 0):.0f}s)")
-            return cached_result
+        # CACHE DISABLED - always fetch fresh results to avoid storing incorrect data
+        # cached_result = self._get_from_cache(grade_name)
+        # if cached_result:
+        #     print(f"[CACHE] Found cached result for '{grade_name}' (age: {cached_result.get('cache_age', 0):.0f}s)")
+        #     return cached_result
 
         result = None
 
@@ -123,9 +123,9 @@ class AISearch:
             print(f"[OK] Найдено {result.get('_valid_elements_count', 0)} валидных элементов")
             print(f"[INFO] Confidence: {confidence_score['level']} ({confidence_score['score']}/100)")
 
-        # Save to cache (TTL: 7 days)
-        self._save_to_cache(grade_name, result)
-        print(f"[CACHE] Результат сохранен в кэш на 7 дней")
+        # CACHE DISABLED - do not save AI results to avoid storing incorrect data
+        # self._save_to_cache(grade_name, result)
+        # print(f"[CACHE] Результат сохранен в кэш на 7 дней")
 
         return result
 
