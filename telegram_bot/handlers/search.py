@@ -88,18 +88,6 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
         return
 
-    elif message_text == "📈 Статистика":
-        # Import stats handler
-        from . import stats
-        await stats.stats_command(update, context)
-        return
-
-    elif message_text == "❓ Помощь":
-        # Import help handler
-        from . import help_command
-        await help_command.help_command(update, context)
-        return
-
     # ===== HANDLE USER INPUT BASED ON WAITING STATE =====
     waiting_for = context.user_data.get('waiting_for')
 
@@ -244,6 +232,7 @@ async def perform_search(update: Update, grade_name: str, context: ContextTypes.
             config.SEARCH_ENDPOINT,
             params={
                 'grade': grade_name,
+                'exact': 'true',  # CRITICAL: Exact match only
                 'ai': 'true' if force_ai else 'false'  # AI only if forced
             },
             timeout=60

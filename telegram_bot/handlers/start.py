@@ -33,8 +33,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Create keyboard with buttons
     keyboard = [
         [KeyboardButton("🔍 Марка"), KeyboardButton("🔗 Аналог")],
-        [KeyboardButton("📊 Схожие"), KeyboardButton("⚖️ Сравнение")],
-        [KeyboardButton("📈 Статистика"), KeyboardButton("❓ Помощь")]
+        [KeyboardButton("📊 Схожие"), KeyboardButton("⚖️ Сравнение")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 

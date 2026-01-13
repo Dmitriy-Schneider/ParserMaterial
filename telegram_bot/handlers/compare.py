@@ -160,7 +160,7 @@ async def perform_compare(update: Update, grades: list):
 
 
 def format_comparison_table(ref_data: dict, compare_grades: list, not_found: list) -> str:
-    """Format comparison as Markdown table with elements as rows, grades as columns"""
+    """Format comparison as code block table with elements as rows, grades as columns"""
 
     lines = ["⚖️ **Сравнение марок стали**\n"]
 
@@ -186,13 +186,17 @@ def format_comparison_table(ref_data: dict, compare_grades: list, not_found: lis
         ('P', 'p')
     ]
 
-    # Build table header
-    # Format: | Element | Grade1 | Grade2 | Grade3 |
-    header = "| Эл-т | " + " | ".join(grade_names) + " |"
-    separator = "|" + "|".join(["---"] * (len(all_grades) + 1)) + "|"
+    # Start code block for table
+    table_lines = []
 
-    lines.append(header)
-    lines.append(separator)
+    # Build header row
+    # Max width for grade names (truncate if needed)
+    max_grade_width = 12
+    truncated_names = [name[:max_grade_width].ljust(max_grade_width) for name in grade_names]
+
+    header = "Эл-т  " + "  ".join(truncated_names)
+    table_lines.append(header)
+    table_lines.append("-" * len(header))
 
     # Build table rows (one row per element)
     for element_name, element_key in elements:
@@ -206,16 +210,24 @@ def format_comparison_table(ref_data: dict, compare_grades: list, not_found: lis
         if not has_element:
             continue  # Skip elements that are absent in all grades
 
-        row = f"| **{element_name}** |"
+        # Format element name (2 chars, left-justified)
+        row_parts = [element_name.ljust(4)]
 
         for grade in all_grades:
             value = grade.get(element_key)
             if value and value not in [None, '', '0', '0.00', 'N/A']:
-                row += f" {value} |"
+                # Truncate and pad value to max_grade_width
+                value_str = str(value)[:max_grade_width].ljust(max_grade_width)
+                row_parts.append(value_str)
             else:
-                row += " - |"
+                row_parts.append("-".ljust(max_grade_width))
 
-        lines.append(row)
+        table_lines.append("  ".join(row_parts))
+
+    # Wrap table in code block
+    lines.append("```")
+    lines.extend(table_lines)
+    lines.append("```")
 
     # Add standards/manufacturers info
     lines.append("\n**📋 Стандарты:**")
