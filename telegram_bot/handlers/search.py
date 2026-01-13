@@ -151,19 +151,7 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     grade = analysis.get('grade')
 
     # Route to appropriate handler based on intent
-    if intent == 'stats':
-        # Import stats handler
-        from . import stats
-        await stats.stats_command(update, context)
-        return
-
-    elif intent == 'help':
-        # Import help handler
-        from . import help_command
-        await help_command.help_command(update, context)
-        return
-
-    elif intent == 'analogues' and grade:
+    if intent == 'analogues' and grade:
         # Import analogues handler
         from . import analogues
         # Manually set args for analogues command

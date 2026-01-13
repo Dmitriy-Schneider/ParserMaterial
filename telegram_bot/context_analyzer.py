@@ -54,9 +54,7 @@ Possible intents:
 2. "analogues" - user wants to find equivalent/analogue grades (official analogues from database)
 3. "fuzzy_search" - user wants to find SIMILAR grades by chemical composition (похожая, схожая, найди похожую)
 4. "compare" - user wants to compare multiple steel grades side-by-side (сравни, сравнить, compare)
-5. "stats" - user wants database statistics
-6. "help" - user needs help or unclear request
-7. "unknown" - cannot determine intent
+5. "unknown" - cannot determine intent
 
 For "fuzzy_search" intent, extract:
 - grade: steel grade name
@@ -77,12 +75,10 @@ Examples:
 - "compare 4140 with AISI 4140" → intent: compare, grades: ["4140", "AISI 4140"]
 - "сравнить HARDOX 500 и AR500" → intent: compare, grades: ["HARDOX 500", "AR500"]
 - "что такое Bohler K340" → intent: search, grade: Bohler K340
-- "сколько марок в базе" → intent: stats
-- "помощь" → intent: help
 
 Return ONLY valid JSON:
 {{
-    "intent": "search|analogues|fuzzy_search|compare|stats|help|unknown",
+    "intent": "search|analogues|fuzzy_search|compare|unknown",
     "grade": "extracted grade name or null",
     "grades": ["list of grades for compare"] or null,
     "tolerance": number or null,
@@ -137,28 +133,6 @@ Return ONLY valid JSON:
             Analysis result
         """
         message_lower = message_text.lower().strip()
-
-        # Check for stats keywords
-        if any(word in message_lower for word in ['статистика', 'stats', 'сколько', 'количество', 'count']):
-            return {
-                'intent': 'stats',
-                'grade': None,
-                'grades': None,
-                'tolerance': None,
-                'max_results': None,
-                'confidence': 0.8
-            }
-
-        # Check for help keywords
-        if any(word in message_lower for word in ['помощь', 'help', 'как', 'что делать', 'команды']):
-            return {
-                'intent': 'help',
-                'grade': None,
-                'grades': None,
-                'tolerance': None,
-                'max_results': None,
-                'confidence': 0.8
-            }
 
         # Check for fuzzy search keywords
         fuzzy_keywords = ['похожая', 'похожий', 'похожую', 'схожая', 'схожий', 'схожую', 'similar', 'найди похож', 'найди схож']

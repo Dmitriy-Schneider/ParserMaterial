@@ -15,7 +15,7 @@ from telegram.ext import (
 )
 
 import config
-from handlers import search, analogues, start, help_command, stats, fuzzy_search, compare
+from handlers import search, analogues, start, fuzzy_search, compare
 
 # Configure logging
 logging.basicConfig(
@@ -32,8 +32,6 @@ def main():
 
     # Register command handlers
     application.add_handler(CommandHandler("start", start.start_command))
-    application.add_handler(CommandHandler("help", help_command.help_command))
-    application.add_handler(CommandHandler("stats", stats.stats_command))
     application.add_handler(CommandHandler("search", search.search_command))
     application.add_handler(CommandHandler("analogues", analogues.analogues_command))
     application.add_handler(CommandHandler("fuzzy", fuzzy_search.fuzzy_search_command))
