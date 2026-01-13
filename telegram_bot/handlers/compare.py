@@ -1,5 +1,6 @@
 """Compare grades handler"""
 import requests
+import html
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -216,8 +217,9 @@ def format_comparison_table(ref_data: dict, compare_grades: list, not_found: lis
         for grade in all_grades:
             value = grade.get(element_key)
             if value and value not in [None, '', '0', '0.00', 'N/A']:
-                # Truncate and pad value to max_grade_width
-                value_str = str(value)[:max_grade_width].ljust(max_grade_width)
+                # Decode HTML entities (e.g., &nbsp; → space) and truncate
+                clean_value = html.unescape(str(value))
+                value_str = clean_value[:max_grade_width].ljust(max_grade_width)
                 row_parts.append(value_str)
             else:
                 row_parts.append("-".ljust(max_grade_width))
