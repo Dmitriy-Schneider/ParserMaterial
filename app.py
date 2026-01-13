@@ -204,21 +204,21 @@ def fuzzy_search_endpoint():
 
         # Get search parameters
         tolerance = float(data.get('tolerance_percent', 50.0))
-        max_results = int(data.get('max_results', 10))
+        max_mismatched = int(data.get('max_mismatched_elements', 3))
 
         # Validate ranges
         if not (0 <= tolerance <= 100):
             return jsonify({'error': 'tolerance_percent must be 0-100'}), 400
 
-        if not (1 <= max_results <= 100):
-            return jsonify({'error': 'max_results must be 1-100'}), 400
+        if not (0 <= max_mismatched <= 14):
+            return jsonify({'error': 'max_mismatched_elements must be 0-14'}), 400
 
         # Perform fuzzy search
         matcher = get_composition_matcher()
         results = matcher.find_similar_grades(
             reference_composition=grade_data,
             tolerance_percent=tolerance,
-            max_results=max_results,
+            max_mismatched_elements=max_mismatched,
             exclude_grade=grade_data.get('grade')
         )
 
@@ -226,7 +226,7 @@ def fuzzy_search_endpoint():
             'success': True,
             'reference_grade': grade_data.get('grade', 'Unknown'),
             'tolerance': tolerance,
-            'max_results': max_results,
+            'max_mismatched_elements': max_mismatched,
             'found_count': len(results),
             'results': results
         })

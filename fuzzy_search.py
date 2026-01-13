@@ -179,10 +179,61 @@ class CompositionMatcher:
 
         return similarity
 
+    def count_mismatched_elements(self,
+                                  ref_composition: Dict[str, Any],
+                                  candidate_composition: Dict[str, Any],
+                                  tolerance_percent: float) -> int:
+        """
+        Подсчет количества элементов, НЕ прошедших tolerance
+
+        Args:
+            ref_composition: Эталонный состав
+            candidate_composition: Состав кандидата
+            tolerance_percent: Допустимое отклонение (%)
+
+        Returns:
+            Количество элементов с отклонением > tolerance_percent
+        """
+        mismatched_count = 0
+
+        # Парсинг эталонного состава
+        ref_values = {}
+        for element in self.ELEMENTS:
+            ref_values[element] = self.parse_element_value(
+                ref_composition.get(element)
+            )
+
+        # Парсинг состава кандидата
+        cand_values = {}
+        for element in self.ELEMENTS:
+            cand_values[element] = self.parse_element_value(
+                candidate_composition.get(element)
+            )
+
+        # Подсчет несовпадающих элементов
+        for element in self.ELEMENTS:
+            ref_val = ref_values.get(element)
+            cand_val = cand_values.get(element)
+
+            # Пропускаем если оба отсутствуют
+            if ref_val is None and cand_val is None:
+                continue
+
+            # Сравниваем элементы
+            is_match, diff_percent = self.calculate_element_similarity(
+                ref_val, cand_val, tolerance_percent
+            )
+
+            # Если не совпадает, увеличиваем счетчик
+            if not is_match:
+                mismatched_count += 1
+
+        return mismatched_count
+
     def find_similar_grades(self,
                            reference_composition: Dict[str, Any],
                            tolerance_percent: float = 50.0,
-                           max_results: int = 10,
+                           max_mismatched_elements: int = 3,
                            exclude_grade: Optional[str] = None) -> List[Dict]:
         """
         Поиск марок с похожим химическим составом
@@ -190,15 +241,17 @@ class CompositionMatcher:
         Args:
             reference_composition: Эталонный состав (dict с grade и элементами)
             tolerance_percent: Максимальное отклонение на элемент (0-100)
-            max_results: Максимум результатов
+            max_mismatched_elements: Максимальное количество элементов с отклонением > tolerance
             exclude_grade: Марка для исключения (обычно сама эталонная)
 
         Returns:
             Список похожих марок отсортированный по similarity (от большего к меньшему)
+            Ограничен 100 марками для производительности
             [
                 {
                     'grade': 'AR500',
                     'similarity': 92.5,
+                    'mismatched_count': 2,
                     'c': '0.28',
                     'cr': '1.20',
                     ...
@@ -234,7 +287,20 @@ class CompositionMatcher:
             if exclude_grade and candidate['grade'] == exclude_grade:
                 continue
 
-            # Расчет похожести
+            # Подсчет несовпадающих элементов
+            mismatched_count = self.count_mismatched_elements(
+                reference_composition,
+                candidate,
+                tolerance_percent
+            )
+
+            # Фильтрация по количеству несовпадающих элементов
+            # max_mismatched_elements = 0 → только полное совпадение
+            # max_mismatched_elements = 2 → допускается отклонение в 2 элементах
+            if mismatched_count > max_mismatched_elements:
+                continue
+
+            # Расчет похожести для сортировки
             similarity = self.calculate_composition_similarity(
                 reference_composition,
                 candidate,
@@ -245,31 +311,16 @@ class CompositionMatcher:
             if similarity is None:
                 continue
 
-            # Фильтрация по tolerance
-            # Tolerance определяет МАКСИМАЛЬНОЕ отклонение от 100%
-            # Tolerance 5% → similarity от 95% до 100%
-            # Tolerance 0% → similarity = 100% (точное совпадение)
-
-            min_similarity = 100 - tolerance_percent
-
-            # Если tolerance > 0, исключаем ПОЛНОЕ совпадение (прямые аналоги)
+            # Исключаем прямые аналоги (практически идентичные марки)
             # Прямые аналоги уже видны в столбце Analogues
-            if tolerance_percent > 0:
-                # Исключаем марки с similarity >= 99.5% (практически идентичные)
-                if similarity >= 99.5:
-                    continue
-                # Проверяем что similarity в допустимом диапазоне
-                if similarity < min_similarity:
-                    continue
-            else:
-                # Tolerance = 0% → только точные совпадения
-                if similarity < 99.5:
-                    continue
+            if similarity >= 99.5:
+                continue
 
             # Добавляем в результаты
             result_item = {
                 'grade': candidate['grade'],
                 'similarity': round(similarity, 1),
+                'mismatched_count': mismatched_count,
             }
 
             # Копируем все поля из candidate
@@ -282,8 +333,8 @@ class CompositionMatcher:
         # Сортировка по похожести (от большего к меньшему)
         results.sort(key=lambda x: x['similarity'], reverse=True)
 
-        # Возвращаем топ N результатов
-        return results[:max_results]
+        # Возвращаем топ 100 результатов для производительности
+        return results[:100]
 
     def __del__(self):
         """Закрытие соединения с БД"""
