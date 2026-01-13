@@ -53,14 +53,18 @@ Possible intents:
 1. "search" - user wants to search for a steel grade (by name or chemical composition)
 2. "analogues" - user wants to find equivalent/analogue grades (official analogues from database)
 3. "fuzzy_search" - user wants to find SIMILAR grades by chemical composition (похожая, схожая, найди похожую)
-4. "stats" - user wants database statistics
-5. "help" - user needs help or unclear request
-6. "unknown" - cannot determine intent
+4. "compare" - user wants to compare multiple steel grades side-by-side (сравни, сравнить, compare)
+5. "stats" - user wants database statistics
+6. "help" - user needs help or unclear request
+7. "unknown" - cannot determine intent
 
 For "fuzzy_search" intent, extract:
 - grade: steel grade name
 - tolerance: percentage value (if mentioned with %, otherwise null). Default is 50%.
 - max_results: number after tolerance (if mentioned, otherwise null). Default is 1.
+
+For "compare" intent, extract:
+- grades: list of steel grade names to compare (2-5 grades)
 
 Examples:
 - "найди 420" → intent: search, grade: 420
@@ -69,14 +73,18 @@ Examples:
 - "найди похожую HARDOX 500 30%" → intent: fuzzy_search, grade: HARDOX 500, tolerance: 30, max_results: null
 - "схожая 4140 50% 10" → intent: fuzzy_search, grade: 4140, tolerance: 50, max_results: 10
 - "похожие марки на D2 25% 5" → intent: fuzzy_search, grade: D2, tolerance: 25, max_results: 5
+- "сравни Х12МФ и D2" → intent: compare, grades: ["Х12МФ", "D2"]
+- "compare 4140 with AISI 4140" → intent: compare, grades: ["4140", "AISI 4140"]
+- "сравнить HARDOX 500 и AR500" → intent: compare, grades: ["HARDOX 500", "AR500"]
 - "что такое Bohler K340" → intent: search, grade: Bohler K340
 - "сколько марок в базе" → intent: stats
 - "помощь" → intent: help
 
 Return ONLY valid JSON:
 {{
-    "intent": "search|analogues|fuzzy_search|stats|help|unknown",
+    "intent": "search|analogues|fuzzy_search|compare|stats|help|unknown",
     "grade": "extracted grade name or null",
+    "grades": ["list of grades for compare"] or null,
     "tolerance": number or null,
     "max_results": number or null,
     "confidence": 0.0-1.0
@@ -135,6 +143,7 @@ Return ONLY valid JSON:
             return {
                 'intent': 'stats',
                 'grade': None,
+                'grades': None,
                 'tolerance': None,
                 'max_results': None,
                 'confidence': 0.8
@@ -145,6 +154,7 @@ Return ONLY valid JSON:
             return {
                 'intent': 'help',
                 'grade': None,
+                'grades': None,
                 'tolerance': None,
                 'max_results': None,
                 'confidence': 0.8
@@ -199,16 +209,47 @@ Return ONLY valid JSON:
                         return {
                             'intent': 'analogues',
                             'grade': grade if grade else None,
+                            'grades': None,
                             'tolerance': None,
                             'max_results': None,
                             'confidence': 0.6
                         }
+
+        # Check for compare keywords
+        compare_keywords = ['сравни', 'сравнить', 'compare', 'сравнение']
+        if any(keyword in message_lower for keyword in compare_keywords):
+            # Extract grade names (separated by "и", "with", ",", etc.)
+            import re
+            text = message_lower
+            for keyword in compare_keywords:
+                text = text.replace(keyword, ' ')
+
+            # Split by common separators
+            separators = [' и ', ' with ', ',', ' vs ', ' versus ']
+            grades = [text.strip()]
+            for sep in separators:
+                if sep in text:
+                    grades = [g.strip() for g in text.split(sep) if g.strip()]
+                    break
+
+            # Filter out empty grades
+            grades = [g for g in grades if g and len(g) > 0]
+
+            return {
+                'intent': 'compare',
+                'grade': None,
+                'grades': grades if len(grades) >= 2 else None,
+                'tolerance': None,
+                'max_results': None,
+                'confidence': 0.7
+            }
 
         # Default: assume search intent
         # The message itself is likely the grade name
         return {
             'intent': 'search',
             'grade': message_text.strip(),
+            'grades': None,
             'tolerance': None,
             'max_results': None,
             'confidence': 0.5
