@@ -433,6 +433,24 @@
             background: #f57c00;
         }
 
+        .btn-compare {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.3s;
+            margin-left: 4px;
+        }
+
+        .btn-compare:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(102, 126, 234, 0.4);
+        }
+
         .ai-badge {
             background: #ff9800;
             color: white;
@@ -664,6 +682,161 @@
             display: block;
         }
 
+        /* Compare Modal Styles */
+        .compare-params {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            flex-shrink: 0;
+        }
+
+        .compare-field {
+            margin-bottom: 15px;
+        }
+
+        .compare-field label {
+            display: block;
+            font-weight: 600;
+            color: #495057;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+
+        .compare-input-readonly {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #e3f2fd;
+            border-radius: 4px;
+            font-size: 14px;
+            background: #e3f2fd;
+            font-weight: 600;
+            color: #1976d2;
+            cursor: not-allowed;
+        }
+
+        .autocomplete-wrapper {
+            position: relative;
+        }
+
+        .compare-input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .compare-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .compare-input.valid {
+            border-color: #4caf50;
+            background: #f1f8f4;
+        }
+
+        .compare-input.invalid {
+            border-color: #f44336;
+            background: #fff5f5;
+        }
+
+        .autocomplete-list {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #667eea;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .autocomplete-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .autocomplete-item:hover {
+            background: #f0f0f0;
+        }
+
+        .compare-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .btn-add-field {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+
+        .btn-add-field:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+        }
+
+        .btn-compare-execute {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .btn-compare-execute:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-clear {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+
+        .btn-clear:hover {
+            background: #5a6268;
+        }
+
+        .compare-results-container {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        #compareModalHeader {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
         #pageInfo {
             font-weight: 600;
             color: #495057;
@@ -866,6 +1039,61 @@
         </div>
     </div>
 
+    <!-- Compare Modal -->
+    <div id="compareModal" class="modal">
+        <div id="compareModalContent" class="modal-content">
+            <div id="compareModalHeader" class="modal-header">
+                <h2>🔄 Compare Grades - <span id="compareRefGradeName"></span></h2>
+                <button class="modal-close" onclick="closeCompareModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="compare-params">
+                    <!-- Reference grade (read-only) -->
+                    <div class="compare-field">
+                        <label><strong>Reference Grade:</strong></label>
+                        <input type="text" id="compareRefGrade" class="compare-input-readonly" readonly>
+                    </div>
+
+                    <!-- Compare fields with autocomplete -->
+                    <div id="compareFieldsContainer">
+                        <div class="compare-field" data-index="0">
+                            <label>Compare with 1:</label>
+                            <div class="autocomplete-wrapper">
+                                <input type="text" class="compare-input" data-index="0"
+                                       placeholder="Type grade name..." autocomplete="off">
+                                <div class="autocomplete-list"></div>
+                            </div>
+                        </div>
+                        <div class="compare-field" data-index="1">
+                            <label>Compare with 2:</label>
+                            <div class="autocomplete-wrapper">
+                                <input type="text" class="compare-input" data-index="1"
+                                       placeholder="Type grade name..." autocomplete="off">
+                                <div class="autocomplete-list"></div>
+                            </div>
+                        </div>
+                        <div class="compare-field" data-index="2">
+                            <label>Compare with 3:</label>
+                            <div class="autocomplete-wrapper">
+                                <input type="text" class="compare-input" data-index="2"
+                                       placeholder="Type grade name..." autocomplete="off">
+                                <div class="autocomplete-list"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="compare-buttons">
+                        <button class="btn-add-field" onclick="addCompareField()">+ Add More</button>
+                        <button class="btn-compare-execute" onclick="performComparison()">Compare</button>
+                        <button class="btn-clear" onclick="clearCompareFields()">Clear</button>
+                    </div>
+                </div>
+
+                <div id="compareResults" class="compare-results-container"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Pagination state
         let currentPage = 1;
@@ -960,8 +1188,11 @@
                 // Standard column
                 let standardCell = steel.standard || '';
 
-                // Actions column - only Similar button
-                let actionsCell = `<button class="btn-fuzzy" onclick='openFuzzyModal(${JSON.stringify(steel)})'>Similar</button>`;
+                // Actions column - Similar and Compare buttons
+                let actionsCell = `
+                    <button class="btn-fuzzy" onclick='openFuzzyModal(${JSON.stringify(steel)})'>Similar</button>
+                    <button class="btn-compare" onclick='openCompareModal(${JSON.stringify(steel)})'>Compare</button>
+                `;
 
                 return `
                 <tr>
@@ -1374,6 +1605,384 @@
                 resultsDiv.innerHTML = `<p style="text-align: center; color: #f44336;">Error: ${error.message}</p>`;
             });
         }
+
+        // ============================================
+        // Compare Modal Functions
+        // ============================================
+        let currentCompareRefSteel = null;
+        let allGradeNames = [];
+        let compareFieldCounter = 3; // Start from 3 (already have 0, 1, 2)
+        const MAX_COMPARE_FIELDS = 7;
+
+        // Load all grade names for autocomplete
+        function loadGradeNames() {
+            fetch('/api/steels/grades-list')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        allGradeNames = data.grades;
+                        console.log(`Loaded ${allGradeNames.length} grade names for autocomplete`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading grade names:', error);
+                });
+        }
+
+        // Call on page load
+        loadGradeNames();
+
+        function openCompareModal(steel) {
+            currentCompareRefSteel = steel;
+            document.getElementById('compareRefGradeName').textContent = steel.grade;
+            document.getElementById('compareRefGrade').value = steel.grade;
+            document.getElementById('compareResults').innerHTML = '';
+
+            // Clear all input fields
+            clearCompareFields();
+
+            document.getElementById('compareModal').style.display = 'block';
+            initCompareModalDrag();
+            attachAutocompleteListeners();
+        }
+
+        function closeCompareModal() {
+            document.getElementById('compareModal').style.display = 'none';
+            currentCompareRefSteel = null;
+        }
+
+        function clearCompareFields() {
+            // Clear all input fields
+            document.querySelectorAll('.compare-input').forEach(input => {
+                input.value = '';
+                input.classList.remove('valid', 'invalid');
+            });
+
+            // Hide all autocomplete lists
+            document.querySelectorAll('.autocomplete-list').forEach(list => {
+                list.style.display = 'none';
+            });
+
+            // Remove dynamically added fields (keep only first 3)
+            const container = document.getElementById('compareFieldsContainer');
+            const fields = container.querySelectorAll('.compare-field');
+            fields.forEach((field, index) => {
+                if (index >= 3) {
+                    field.remove();
+                }
+            });
+
+            compareFieldCounter = 3;
+
+            // Clear results
+            document.getElementById('compareResults').innerHTML = '';
+        }
+
+        function addCompareField() {
+            if (compareFieldCounter >= MAX_COMPARE_FIELDS) {
+                alert(`Maximum ${MAX_COMPARE_FIELDS} comparison fields allowed`);
+                return;
+            }
+
+            const container = document.getElementById('compareFieldsContainer');
+            const newField = document.createElement('div');
+            newField.className = 'compare-field';
+            newField.setAttribute('data-index', compareFieldCounter);
+            newField.innerHTML = `
+                <label>Compare with ${compareFieldCounter + 1}:</label>
+                <div class="autocomplete-wrapper">
+                    <input type="text" class="compare-input" data-index="${compareFieldCounter}"
+                           placeholder="Type grade name..." autocomplete="off">
+                    <div class="autocomplete-list"></div>
+                </div>
+            `;
+
+            container.appendChild(newField);
+            compareFieldCounter++;
+
+            // Attach autocomplete to new field
+            attachAutocompleteListeners();
+        }
+
+        function attachAutocompleteListeners() {
+            document.querySelectorAll('.compare-input').forEach(input => {
+                // Remove old listeners by cloning
+                const newInput = input.cloneNode(true);
+                input.parentNode.replaceChild(newInput, input);
+
+                newInput.addEventListener('input', function(e) {
+                    const query = e.target.value.trim().toUpperCase();
+                    const wrapper = e.target.closest('.autocomplete-wrapper');
+                    const listElement = wrapper.querySelector('.autocomplete-list');
+
+                    if (query.length < 1) {
+                        hideAutocomplete(listElement);
+                        e.target.classList.remove('valid', 'invalid');
+                        return;
+                    }
+
+                    // Filter grades (starts with query)
+                    const matches = allGradeNames.filter(grade =>
+                        grade.toUpperCase().startsWith(query)
+                    ).slice(0, 10);
+
+                    if (matches.length > 0) {
+                        showAutocomplete(listElement, matches, e.target);
+                    } else {
+                        hideAutocomplete(listElement);
+                        e.target.classList.add('invalid');
+                        e.target.classList.remove('valid');
+                    }
+                });
+
+                newInput.addEventListener('blur', function(e) {
+                    // Delay to allow click on autocomplete item
+                    setTimeout(() => {
+                        const wrapper = e.target.closest('.autocomplete-wrapper');
+                        const listElement = wrapper.querySelector('.autocomplete-list');
+                        hideAutocomplete(listElement);
+
+                        // Validate input
+                        const value = e.target.value.trim();
+                        if (value && allGradeNames.includes(value)) {
+                            e.target.classList.add('valid');
+                            e.target.classList.remove('invalid');
+                        } else if (value) {
+                            e.target.classList.add('invalid');
+                            e.target.classList.remove('valid');
+                        } else {
+                            e.target.classList.remove('valid', 'invalid');
+                        }
+                    }, 200);
+                });
+            });
+        }
+
+        function showAutocomplete(listElement, matches, inputElement) {
+            listElement.innerHTML = '';
+            matches.forEach(grade => {
+                const item = document.createElement('div');
+                item.className = 'autocomplete-item';
+                item.textContent = grade;
+                item.addEventListener('click', function() {
+                    inputElement.value = grade;
+                    inputElement.classList.add('valid');
+                    inputElement.classList.remove('invalid');
+                    hideAutocomplete(listElement);
+                });
+                listElement.appendChild(item);
+            });
+            listElement.style.display = 'block';
+        }
+
+        function hideAutocomplete(listElement) {
+            listElement.style.display = 'none';
+        }
+
+        function performComparison() {
+            const refGrade = currentCompareRefSteel.grade;
+            const compareGrades = [];
+
+            // Collect all valid grade names
+            document.querySelectorAll('.compare-input').forEach(input => {
+                const value = input.value.trim();
+                if (value && allGradeNames.includes(value)) {
+                    // Avoid duplicates
+                    if (!compareGrades.includes(value) && value !== refGrade) {
+                        compareGrades.push(value);
+                    }
+                }
+            });
+
+            if (compareGrades.length === 0) {
+                alert('Please select at least one valid grade to compare');
+                return;
+            }
+
+            const resultsDiv = document.getElementById('compareResults');
+            resultsDiv.innerHTML = '<p style="text-align: center;">Loading comparison...</p>';
+
+            // Send to backend
+            fetch('/api/steels/compare', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    reference_grade: refGrade,
+                    compare_grades: compareGrades
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.results.length > 0) {
+                    displayComparisonResults(data);
+                } else {
+                    resultsDiv.innerHTML = '<p style="text-align: center; color: #f44336;">No grades found for comparison.</p>';
+                }
+            })
+            .catch(error => {
+                resultsDiv.innerHTML = `<p style="text-align: center; color: #f44336;">Error: ${error.message}</p>`;
+            });
+        }
+
+        function displayComparisonResults(data) {
+            const resultsDiv = document.getElementById('compareResults');
+
+            // Create table (similar to Fuzzy Search but without Similarity column)
+            let html = `
+                <table class="fuzzy-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 100px;">Grade</th>
+                            <th style="width: 50px;">C</th>
+                            <th style="width: 50px;">Cr</th>
+                            <th style="width: 50px;">Ni</th>
+                            <th style="width: 50px;">Mo</th>
+                            <th style="width: 50px;">V</th>
+                            <th style="width: 50px;">W</th>
+                            <th style="width: 50px;">Co</th>
+                            <th style="width: 50px;">Mn</th>
+                            <th style="width: 50px;">Si</th>
+                            <th style="width: 50px;">Cu</th>
+                            <th style="width: 50px;">Nb</th>
+                            <th style="width: 50px;">N</th>
+                            <th style="width: 50px;">S</th>
+                            <th style="width: 50px;">P</th>
+                            <th style="width: 120px;">Standard</th>
+                            <th>Analogues</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Pinned reference row -->
+                        <tr class="reference-row">
+                            <td><strong>📍 ${data.reference_grade}</strong></td>
+                            <td><strong>${data.reference_data.c || '-'}</strong></td>
+                            <td><strong>${data.reference_data.cr || '-'}</strong></td>
+                            <td><strong>${data.reference_data.ni || '-'}</strong></td>
+                            <td><strong>${data.reference_data.mo || '-'}</strong></td>
+                            <td><strong>${data.reference_data.v || '-'}</strong></td>
+                            <td><strong>${data.reference_data.w || '-'}</strong></td>
+                            <td><strong>${data.reference_data.co || '-'}</strong></td>
+                            <td><strong>${data.reference_data.mn || '-'}</strong></td>
+                            <td><strong>${data.reference_data.si || '-'}</strong></td>
+                            <td><strong>${data.reference_data.cu || '-'}</strong></td>
+                            <td><strong>${data.reference_data.nb || '-'}</strong></td>
+                            <td><strong>${data.reference_data.n || '-'}</strong></td>
+                            <td><strong>${data.reference_data.s || '-'}</strong></td>
+                            <td><strong>${data.reference_data.p || '-'}</strong></td>
+                            <td><strong>${data.reference_data.standard || '-'}</strong></td>
+                            <td style="font-size: 10px;">${(data.reference_data.analogues || '').replace(/\*/g, ' ')}</td>
+                        </tr>
+            `;
+
+            // Add compared grades
+            const elements = ['c', 'cr', 'ni', 'mo', 'v', 'w', 'co', 'mn', 'si', 'cu', 'nb', 'n', 's', 'p'];
+
+            data.results.forEach(result => {
+                let gradeCell = result.grade;
+                if (result.link) {
+                    gradeCell = `<a href="${result.link}" target="_blank" class="grade-link">${result.grade}</a>`;
+                }
+
+                let analoguesCell = (result.analogues || '').replace(/\*/g, ' ');
+
+                // Compare elements and highlight differences
+                let elementCells = {};
+
+                elements.forEach(elem => {
+                    const refVal = parseElementValue(data.reference_data[elem]);
+                    const candVal = parseElementValue(result[elem]);
+                    const diff = calculateDifference(refVal, candVal);
+                    const displayValue = result[elem] || '-';
+
+                    if (refVal !== null || candVal !== null) {
+                        const diffClass = getDiffClass(diff);
+                        const tooltip = diff > 0 ? `Diff: ${diff.toFixed(1)}%` : 'Same';
+                        elementCells[elem] = `<td class="${diffClass}"><div class="diff-tooltip">${tooltip}</div>${displayValue}</td>`;
+                    } else {
+                        elementCells[elem] = `<td>${displayValue}</td>`;
+                    }
+                });
+
+                html += `
+                    <tr>
+                        <td>${gradeCell}</td>
+                        ${elementCells['c']}
+                        ${elementCells['cr']}
+                        ${elementCells['ni']}
+                        ${elementCells['mo']}
+                        ${elementCells['v']}
+                        ${elementCells['w']}
+                        ${elementCells['co']}
+                        ${elementCells['mn']}
+                        ${elementCells['si']}
+                        ${elementCells['cu']}
+                        ${elementCells['nb']}
+                        ${elementCells['n']}
+                        ${elementCells['s']}
+                        ${elementCells['p']}
+                        <td>${result.standard || '-'}</td>
+                        <td style="max-width: 250px; white-space: normal; overflow: hidden; text-overflow: ellipsis;">${analoguesCell}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            resultsDiv.innerHTML = html;
+        }
+
+        // Make Compare modal draggable
+        function initCompareModalDrag() {
+            const modal = document.getElementById('compareModalContent');
+            const header = document.getElementById('compareModalHeader');
+            let isDragging = false;
+            let currentX;
+            let currentY;
+            let initialX;
+            let initialY;
+            let xOffset = 0;
+            let yOffset = 0;
+
+            header.addEventListener('mousedown', dragStart);
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', dragEnd);
+
+            function dragStart(e) {
+                initialX = e.clientX - xOffset;
+                initialY = e.clientY - yOffset;
+                if (e.target === header || e.target.tagName === 'H2' || e.target.tagName === 'SPAN') {
+                    isDragging = true;
+                }
+            }
+
+            function drag(e) {
+                if (isDragging) {
+                    e.preventDefault();
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+                    xOffset = currentX;
+                    yOffset = currentY;
+                    modal.style.transform = `translate(calc(-50% + ${currentX}px), calc(-50% + ${currentY}px))`;
+                }
+            }
+
+            function dragEnd(e) {
+                initialX = currentX;
+                initialY = currentY;
+                isDragging = false;
+            }
+        }
+
+        // Close Compare modal on outside click
+        window.addEventListener('click', function(event) {
+            const compareModal = document.getElementById('compareModal');
+            if (event.target === compareModal) {
+                closeCompareModal();
+            }
+        });
     </script>
 
     <!-- Fixed stats in corner -->

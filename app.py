@@ -237,6 +237,93 @@ def fuzzy_search_endpoint():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@app.route('/api/steels/grades-list', methods=['GET'])
+def get_grades_list():
+    """Get list of all grade names for autocomplete in Compare module"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT DISTINCT grade FROM steel_grades ORDER BY grade")
+        grades = [row[0] for row in cursor.fetchall()]
+
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'count': len(grades),
+            'grades': grades
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/steels/compare', methods=['POST'])
+def compare_grades_endpoint():
+    """Compare specific steel grades side-by-side"""
+    try:
+        data = request.get_json() or {}
+
+        reference_grade = data.get('reference_grade')
+        compare_grades = data.get('compare_grades', [])
+
+        if not reference_grade:
+            return jsonify({'error': 'reference_grade is required'}), 400
+
+        if not compare_grades or len(compare_grades) == 0:
+            return jsonify({'error': 'compare_grades list is required'}), 400
+
+        # Get data from DB for all grades
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        # Reference grade
+        cursor.execute("""
+            SELECT grade, c, cr, ni, mo, v, w, co, mn, si, cu, nb, n, s, p,
+                   standard, manufacturer, analogues, link, base, tech
+            FROM steel_grades
+            WHERE grade = ?
+        """, (reference_grade,))
+
+        ref_data = cursor.fetchone()
+        if not ref_data:
+            conn.close()
+            return jsonify({'error': f'Reference grade "{reference_grade}" not found'}), 404
+
+        columns = ['grade', 'c', 'cr', 'ni', 'mo', 'v', 'w', 'co', 'mn', 'si',
+                   'cu', 'nb', 'n', 's', 'p', 'standard', 'manufacturer',
+                   'analogues', 'link', 'base', 'tech']
+
+        ref_dict = dict(zip(columns, ref_data))
+
+        # Compare grades
+        results = []
+        for grade_name in compare_grades:
+            cursor.execute("""
+                SELECT grade, c, cr, ni, mo, v, w, co, mn, si, cu, nb, n, s, p,
+                       standard, manufacturer, analogues, link, base, tech
+                FROM steel_grades
+                WHERE grade = ?
+            """, (grade_name,))
+
+            row = cursor.fetchone()
+            if row:
+                results.append(dict(zip(columns, row)))
+
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'reference_grade': reference_grade,
+            'reference_data': ref_dict,
+            'compare_count': len(results),
+            'results': results
+        })
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/steels/add', methods=['POST'])
 def add_steel():
     """Add AI search result to main database"""
