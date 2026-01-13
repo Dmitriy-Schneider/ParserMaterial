@@ -34,6 +34,130 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
     if len(message_text) < 2 or len(message_text) > 100:
         return
 
+    # ===== BUTTON HANDLERS =====
+    # Check if user clicked a button (instant, no AI tokens used)
+
+    if message_text == "🔍 Марка":
+        # Save state: waiting for grade name
+        context.user_data['waiting_for'] = 'grade'
+        await update.message.reply_text(
+            "🔍 **Поиск марки стали**\n\n"
+            "Отправьте название марки для поиска.\n"
+            "Например: `420`, `Х12МФ`, `AISI 304`",
+            parse_mode='Markdown'
+        )
+        return
+
+    elif message_text == "🔗 Аналог":
+        # Save state: waiting for grade name for analogues
+        context.user_data['waiting_for'] = 'analogues'
+        await update.message.reply_text(
+            "🔗 **Поиск аналогов**\n\n"
+            "Отправьте название марки для поиска аналогов.\n"
+            "Например: `D2`, `420`, `HARDOX 500`",
+            parse_mode='Markdown'
+        )
+        return
+
+    elif message_text == "📊 Схожие":
+        # Save state: waiting for grade name for fuzzy search
+        context.user_data['waiting_for'] = 'fuzzy_search'
+        await update.message.reply_text(
+            "📊 **Поиск схожих марок**\n\n"
+            "Отправьте марку и параметры:\n"
+            "`Марка Tolerance% MaxResults`\n\n"
+            "Примеры:\n"
+            "• `HARDOX 500 10 5` - схожесть 10%, показать 5 марок\n"
+            "• `Х12МФ 5 3` - схожесть 5%, показать 3 марки\n"
+            "• `D2` - схожесть 50% (по умолчанию), 1 марка",
+            parse_mode='Markdown'
+        )
+        return
+
+    elif message_text == "⚖️ Сравнение":
+        # Save state: waiting for grades for comparison
+        context.user_data['waiting_for'] = 'compare'
+        await update.message.reply_text(
+            "⚖️ **Сравнение марок**\n\n"
+            "Отправьте марки для сравнения через запятую или 'и'.\n\n"
+            "Примеры:\n"
+            "• `Х12МФ и D2`\n"
+            "• `420, AISI 420, 1.4034`\n"
+            "• `HARDOX 500, AR500`",
+            parse_mode='Markdown'
+        )
+        return
+
+    elif message_text == "📈 Статистика":
+        # Import stats handler
+        from . import stats
+        await stats.stats_command(update, context)
+        return
+
+    elif message_text == "❓ Помощь":
+        # Import help handler
+        from . import help_command
+        await help_command.help_command(update, context)
+        return
+
+    # ===== HANDLE USER INPUT BASED ON WAITING STATE =====
+    waiting_for = context.user_data.get('waiting_for')
+
+    if waiting_for == 'grade':
+        # User sent grade name after clicking "🔍 Марка" button
+        context.user_data['waiting_for'] = None
+        await perform_search(update, message_text, context)
+        return
+
+    elif waiting_for == 'analogues':
+        # User sent grade name after clicking "🔗 Аналог" button
+        context.user_data['waiting_for'] = None
+        from . import analogues
+        context.args = [message_text]
+        await analogues.analogues_command(update, context)
+        return
+
+    elif waiting_for == 'fuzzy_search':
+        # User sent grade and parameters after clicking "📊 Схожие" button
+        context.user_data['waiting_for'] = None
+        from . import fuzzy_search
+        # Parse parameters: grade tolerance max_results
+        parts = message_text.split()
+        grade = parts[0] if len(parts) > 0 else message_text
+        tolerance = parts[1] if len(parts) > 1 else "50"
+        max_results = parts[2] if len(parts) > 2 else "1"
+        context.args = [grade, tolerance, max_results]
+        await fuzzy_search.fuzzy_search_command(update, context)
+        return
+
+    elif waiting_for == 'compare':
+        # User sent grades for comparison after clicking "⚖️ Сравнение" button
+        context.user_data['waiting_for'] = None
+        # Parse grades (separated by "и", "with", ",")
+        import re
+        grades = re.split(r'\s+и\s+|\s+with\s+|,', message_text)
+        grades = [g.strip() for g in grades if g.strip()]
+
+        if len(grades) < 2:
+            await update.message.reply_text(
+                "❌ Укажите минимум 2 марки для сравнения.\n"
+                "Например: `Х12МФ и D2`",
+                parse_mode='Markdown'
+            )
+            return
+
+        # TODO: Call compare handler when implemented
+        await update.message.reply_text(
+            f"⚖️ Сравнение марок: {', '.join(grades)}\n\n"
+            "⏳ Функция сравнения пока в разработке...",
+            parse_mode='Markdown'
+        )
+        return
+
+    # ===== AI CONTEXT ANALYZER (fallback) =====
+    # If no button clicked and no waiting state, use AI to understand intent
+    # This costs tokens but provides natural language understanding
+
     # Analyze intent using GPT-4 mini
     analyzer = get_context_analyzer()
     analysis = analyzer.analyze_message(message_text)
