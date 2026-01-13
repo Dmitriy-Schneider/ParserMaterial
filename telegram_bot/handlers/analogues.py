@@ -24,10 +24,10 @@ async def analogues_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode='Markdown'
         )
 
-        # First, find the grade
+        # First, find the grade (exact match only)
         response = requests.get(
             config.SEARCH_ENDPOINT,
-            params={'grade': grade_name},
+            params={'grade': grade_name, 'exact': 'true'},
             timeout=30
         )
 

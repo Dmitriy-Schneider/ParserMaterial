@@ -146,12 +146,9 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             return
 
-        # TODO: Call compare handler when implemented
-        await update.message.reply_text(
-            f"⚖️ Сравнение марок: {', '.join(grades)}\n\n"
-            "⏳ Функция сравнения пока в разработке...",
-            parse_mode='Markdown'
-        )
+        # Call compare handler
+        from . import compare
+        await compare.perform_compare(update, grades)
         return
 
     # ===== AI CONTEXT ANALYZER (fallback) =====
@@ -195,6 +192,21 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.args = [grade, str(tolerance), str(max_results)]
         await fuzzy_search.fuzzy_search_command(update, context)
         return
+
+    elif intent == 'compare':
+        # Import compare handler
+        grades = analysis.get('grades', [])
+        if grades and len(grades) >= 2:
+            from . import compare
+            await compare.perform_compare(update, grades)
+            return
+        else:
+            await update.message.reply_text(
+                "❌ Укажите минимум 2 марки для сравнения.\n"
+                "Например: `Сравни Х12МФ и D2`",
+                parse_mode='Markdown'
+            )
+            return
 
     # Default: search
     # Use extracted grade or original message
