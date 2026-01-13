@@ -1266,12 +1266,18 @@
                                     <th style="width: 60px;">Similarity</th>
                                     <th style="width: 50px;">C</th>
                                     <th style="width: 50px;">Cr</th>
-                                    <th style="width: 50px;">Mo</th>
                                     <th style="width: 50px;">Ni</th>
+                                    <th style="width: 50px;">Mo</th>
+                                    <th style="width: 50px;">V</th>
+                                    <th style="width: 50px;">W</th>
+                                    <th style="width: 50px;">Co</th>
                                     <th style="width: 50px;">Mn</th>
                                     <th style="width: 50px;">Si</th>
-                                    <th style="width: 80px;">V</th>
-                                    <th style="width: 80px;">W</th>
+                                    <th style="width: 50px;">Cu</th>
+                                    <th style="width: 50px;">Nb</th>
+                                    <th style="width: 50px;">N</th>
+                                    <th style="width: 50px;">S</th>
+                                    <th style="width: 50px;">P</th>
                                     <th style="width: 120px;">Standard</th>
                                     <th>Analogues</th>
                                 </tr>
@@ -1283,12 +1289,18 @@
                                     <td style="text-align: center;"><strong>Reference</strong></td>
                                     <td><strong>${currentRefSteel.c || '-'}</strong></td>
                                     <td><strong>${currentRefSteel.cr || '-'}</strong></td>
-                                    <td><strong>${currentRefSteel.mo || '-'}</strong></td>
                                     <td><strong>${currentRefSteel.ni || '-'}</strong></td>
-                                    <td><strong>${currentRefSteel.mn || '-'}</strong></td>
-                                    <td><strong>${currentRefSteel.si || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.mo || '-'}</strong></td>
                                     <td><strong>${currentRefSteel.v || '-'}</strong></td>
                                     <td><strong>${currentRefSteel.w || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.co || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.mn || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.si || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.cu || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.nb || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.n || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.s || '-'}</strong></td>
+                                    <td><strong>${currentRefSteel.p || '-'}</strong></td>
                                     <td><strong>${currentRefSteel.standard || '-'}</strong></td>
                                     <td style="font-size: 10px;">${(currentRefSteel.analogues || '').replace(/\*/g, ' ')}</td>
                                 </tr>
@@ -1305,7 +1317,8 @@
                         let analoguesCell = (result.analogues || '').replace(/\*/g, ' ');
 
                         // Compare elements and highlight differences
-                        const elements = ['c', 'cr', 'mo', 'ni', 'mn', 'si', 'v', 'w'];
+                        // All elements from fuzzy_search.py ELEMENTS list
+                        const elements = ['c', 'cr', 'ni', 'mo', 'v', 'w', 'co', 'mn', 'si', 'cu', 'nb', 'n', 's', 'p'];
                         let elementCells = {};
 
                         elements.forEach(elem => {
@@ -1329,12 +1342,18 @@
                                 <td style="text-align: center;"><span class="similarity-badge">${result.similarity}%</span></td>
                                 ${elementCells['c']}
                                 ${elementCells['cr']}
-                                ${elementCells['mo']}
                                 ${elementCells['ni']}
-                                ${elementCells['mn']}
-                                ${elementCells['si']}
+                                ${elementCells['mo']}
                                 ${elementCells['v']}
                                 ${elementCells['w']}
+                                ${elementCells['co']}
+                                ${elementCells['mn']}
+                                ${elementCells['si']}
+                                ${elementCells['cu']}
+                                ${elementCells['nb']}
+                                ${elementCells['n']}
+                                ${elementCells['s']}
+                                ${elementCells['p']}
                                 <td>${result.standard || '-'}</td>
                                 <td style="max-width: 250px; white-space: normal; overflow: hidden; text-overflow: ellipsis;">${analoguesCell}</td>
                             </tr>
