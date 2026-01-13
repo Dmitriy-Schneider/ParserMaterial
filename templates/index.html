@@ -1072,14 +1072,6 @@
                                 <div class="autocomplete-list"></div>
                             </div>
                         </div>
-                        <div class="compare-field" data-index="2">
-                            <label>Compare with 3:</label>
-                            <div class="autocomplete-wrapper">
-                                <input type="text" class="compare-input" data-index="2"
-                                       placeholder="Type grade name..." autocomplete="off">
-                                <div class="autocomplete-list"></div>
-                            </div>
-                        </div>
                     </div>
 
                     <div class="compare-buttons">
@@ -1611,7 +1603,7 @@
         // ============================================
         let currentCompareRefSteel = null;
         let allGradeNames = [];
-        let compareFieldCounter = 3; // Start from 3 (already have 0, 1, 2)
+        let compareFieldCounter = 2; // Start from 2 (already have 0, 1)
         const MAX_COMPARE_FIELDS = 7;
 
         // Load all grade names for autocomplete
@@ -1663,16 +1655,16 @@
                 list.style.display = 'none';
             });
 
-            // Remove dynamically added fields (keep only first 3)
+            // Remove dynamically added fields (keep only first 2)
             const container = document.getElementById('compareFieldsContainer');
             const fields = container.querySelectorAll('.compare-field');
             fields.forEach((field, index) => {
-                if (index >= 3) {
+                if (index >= 2) {
                     field.remove();
                 }
             });
 
-            compareFieldCounter = 3;
+            compareFieldCounter = 2;
 
             // Clear results
             document.getElementById('compareResults').innerHTML = '';
