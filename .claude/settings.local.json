@@ -44,7 +44,13 @@
       "Bash(find:*)",
       "Bash(git mv:*)",
       "Bash(grep:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(Например: эталон C=0.30%, при tolerance 50% → найдет марки)",
+      "Bash(с C от 0.15% до 0.60%. Чем ниже tolerance, тем точнее совпадение.\"\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(docker cp:*)",
+      "Bash(del \"c:\\\\Users\\\\dmitr\\\\OneDrive\\\\Desktop\\\\AL\\\\ParserSteel\\\\fix_bohler_country.py\")",
+      "Bash(docker restart:*)",
+      "Bash(docker ps:*)"
     ]
   }
 }
