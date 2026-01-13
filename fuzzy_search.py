@@ -146,8 +146,10 @@ class CompositionMatcher:
             ref_val = ref_values.get(element)
             cand_val = cand_values.get(element)
 
-            # Пропускаем если оба отсутствуют
-            if ref_val is None and cand_val is None:
+            # КРИТИЧНО: Пропускаем если ХОТЯ БЫ ОДИН элемент отсутствует
+            # Сравниваем только элементы, присутствующие у ОБЕИХ марок
+            # Это предотвращает ложное снижение similarity из-за неполных данных
+            if ref_val is None or cand_val is None:
                 continue
 
             # Вес элемента по важности
