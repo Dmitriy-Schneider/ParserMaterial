@@ -239,9 +239,30 @@ class CompositionMatcher:
                 tolerance_percent
             )
 
-            # Пропускаем если нельзя сравнить или похожесть низкая
-            if similarity is None or similarity < 40:  # Минимум 40% похожести
+            # Пропускаем если нельзя сравнить
+            if similarity is None:
                 continue
+
+            # Фильтрация по tolerance
+            # Tolerance определяет МАКСИМАЛЬНОЕ отклонение от 100%
+            # Tolerance 5% → similarity от 95% до 100%
+            # Tolerance 0% → similarity = 100% (точное совпадение)
+
+            min_similarity = 100 - tolerance_percent
+
+            # Если tolerance > 0, исключаем ПОЛНОЕ совпадение (прямые аналоги)
+            # Прямые аналоги уже видны в столбце Analogues
+            if tolerance_percent > 0:
+                # Исключаем марки с similarity >= 99.5% (практически идентичные)
+                if similarity >= 99.5:
+                    continue
+                # Проверяем что similarity в допустимом диапазоне
+                if similarity < min_similarity:
+                    continue
+            else:
+                # Tolerance = 0% → только точные совпадения
+                if similarity < 99.5:
+                    continue
 
             # Добавляем в результаты
             result_item = {
