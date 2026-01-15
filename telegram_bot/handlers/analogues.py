@@ -80,9 +80,46 @@ def format_analogues(steel: dict) -> str:
         lines.append("**Мировые аналоги:**")
         # Split by space or comma
         analogue_list = analogues.replace(',', ' ').split()
+
+        # Get detailed info for each analogue
         for analogue in analogue_list:
             if analogue:
-                lines.append(f"  • {analogue}")
+                # Try to get additional info from database
+                try:
+                    response = requests.get(
+                        config.SEARCH_ENDPOINT,
+                        params={'grade': analogue, 'exact': 'true'},
+                        timeout=5
+                    )
+
+                    if response.status_code == 200:
+                        results = response.json()
+                        if results and len(results) > 0:
+                            analogue_data = results[0]
+
+                            # Build info string: Grade, Standard, Manufacturer, Country
+                            info_parts = [analogue]
+
+                            standard = analogue_data.get('standard')
+                            if standard and standard not in [None, '', 'N/A']:
+                                info_parts.append(standard)
+
+                            manufacturer = analogue_data.get('manufacturer')
+                            if manufacturer and manufacturer not in [None, '', 'N/A']:
+                                info_parts.append(manufacturer)
+
+                            # Note: country is typically part of standard (e.g., GOST = Russia, AISI = USA)
+                            # If there's a separate country field, add it here
+
+                            lines.append(f"  • {', '.join(info_parts)}")
+                        else:
+                            # Analogue not found in DB, show just name
+                            lines.append(f"  • {analogue}")
+                    else:
+                        lines.append(f"  • {analogue}")
+                except:
+                    # If request fails, show just the name
+                    lines.append(f"  • {analogue}")
     else:
         lines.append("_Аналоги не найдены в базе данных._")
         lines.append("\nПопробуйте использовать `/search` для поиска похожих марок по химическому составу.")
