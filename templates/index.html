@@ -1174,8 +1174,11 @@
                     gradeCell += '<span class="ai-badge">AI</span>';
                 }
 
-                // Replace asterisks with spaces in analogues
-                let analoguesCell = (steel.analogues || '').replace(/\*/g, ' ');
+                // Replace asterisks with spaces and create clickable links for each analogue
+                let analoguesArray = (steel.analogues || '').replace(/\*/g, ' ').trim().split(/\s+/).filter(a => a);
+                let analoguesCell = analoguesArray.map(analogue =>
+                    `<a href="#" class="grade-link" onclick="searchAnalogue('${analogue.replace(/'/g, "\\'")}'); return false;">${analogue}</a>`
+                ).join(' ');
 
                 // Standard column
                 let standardCell = steel.standard || '';
@@ -1327,6 +1330,23 @@
             });
 
             searchSteels();
+        }
+
+        // Search for analogue grade (exact match)
+        function searchAnalogue(grade) {
+            // Close any open modals
+            closeFuzzyModal();
+            closeCompareModal();
+
+            // Clear all filters
+            clearFilters();
+
+            // Set grade filter and search
+            document.getElementById('gradeFilter').value = grade;
+            searchExact();
+
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
         // Auto-search on input (debounced)
@@ -1525,7 +1545,11 @@
                                     <td><strong>${currentRefSteel.s || '-'}</strong></td>
                                     <td><strong>${currentRefSteel.p || '-'}</strong></td>
                                     <td><strong>${currentRefSteel.standard || '-'}</strong></td>
-                                    <td style="font-size: 10px; white-space: normal; word-wrap: break-word;">${(currentRefSteel.analogues || '').replace(/\*/g, ' ')}</td>
+                                    <td style="font-size: 10px; white-space: normal; word-wrap: break-word;">${
+                                        (currentRefSteel.analogues || '').replace(/\*/g, ' ').trim().split(/\s+/).filter(a => a).map(analogue =>
+                                            `<a href="#" class="grade-link" onclick="searchAnalogue('${analogue.replace(/'/g, "\\'")}'); return false;">${analogue}</a>`
+                                        ).join(' ')
+                                    }</td>
                                 </tr>
                     `;
 
@@ -1536,8 +1560,11 @@
                             gradeCell = `<a href="${result.link}" target="_blank" class="grade-link">${result.grade}</a>`;
                         }
 
-                        // Replace asterisks with spaces in analogues
-                        let analoguesCell = (result.analogues || '').replace(/\*/g, ' ');
+                        // Replace asterisks with spaces and create clickable links for each analogue
+                        let analoguesArray = (result.analogues || '').replace(/\*/g, ' ').trim().split(/\s+/).filter(a => a);
+                        let analoguesCell = analoguesArray.map(analogue =>
+                            `<a href="#" class="grade-link" onclick="searchAnalogue('${analogue.replace(/'/g, "\\'")}'); return false;">${analogue}</a>`
+                        ).join(' ');
 
                         // Compare elements and highlight differences
                         // All elements from fuzzy_search.py ELEMENTS list
@@ -1862,7 +1889,11 @@
                             <td><strong>${data.reference_data.s || '-'}</strong></td>
                             <td><strong>${data.reference_data.p || '-'}</strong></td>
                             <td><strong>${data.reference_data.standard || '-'}</strong></td>
-                            <td style="font-size: 10px; white-space: normal; word-wrap: break-word;">${(data.reference_data.analogues || '').replace(/\*/g, ' ')}</td>
+                            <td style="font-size: 10px; white-space: normal; word-wrap: break-word;">${
+                                (data.reference_data.analogues || '').replace(/\*/g, ' ').trim().split(/\s+/).filter(a => a).map(analogue =>
+                                    `<a href="#" class="grade-link" onclick="searchAnalogue('${analogue.replace(/'/g, "\\'")}'); return false;">${analogue}</a>`
+                                ).join(' ')
+                            }</td>
                         </tr>
             `;
 
@@ -1875,7 +1906,10 @@
                     gradeCell = `<a href="${result.link}" target="_blank" class="grade-link">${result.grade}</a>`;
                 }
 
-                let analoguesCell = (result.analogues || '').replace(/\*/g, ' ');
+                let analoguesArray = (result.analogues || '').replace(/\*/g, ' ').trim().split(/\s+/).filter(a => a);
+                let analoguesCell = analoguesArray.map(analogue =>
+                    `<a href="#" class="grade-link" onclick="searchAnalogue('${analogue.replace(/'/g, "\\'")}'); return false;">${analogue}</a>`
+                ).join(' ');
 
                 // Compare elements and highlight differences
                 let elementCells = {};
