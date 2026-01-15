@@ -31,7 +31,12 @@ class CompositionMatcher:
     def parse_element_value(self, value_str: Any) -> Optional[float]:
         """
         Парсинг значения элемента из БД
-        Обрабатывает: '0.30', '3.75-4.50', None, '', 'null'
+        Обрабатывает:
+        - '0.30' - одиночное значение
+        - '3.75-4.50' - диапазон (берем середину)
+        - 'до 0.08' - максимальное значение (берем как есть)
+        - 'до &nbsp; 1' - с HTML entities (декодируем)
+        - None, '', 'null', '0', '0.00' - возвращаем None
 
         Args:
             value_str: Значение из БД
@@ -44,13 +49,27 @@ class CompositionMatcher:
 
         value_str = str(value_str).strip()
 
+        # Декодируем HTML entities (например, &nbsp; → пробел)
+        import html
+        value_str = html.unescape(value_str)
+
+        # Удаляем HTML entities которые не декодировались
+        value_str = value_str.replace('&nbsp;', ' ')
+
+        # Удаляем лишние пробелы
+        value_str = ' '.join(value_str.split())
+
+        # Обрабатываем префикс "до" (максимальное значение)
+        if value_str.startswith('до '):
+            value_str = value_str[3:].strip()
+
         # Диапазон: берем середину
-        if '-' in value_str:
+        if '-' in value_str and not value_str.startswith('-'):
             try:
                 parts = value_str.split('-')
                 if len(parts) == 2:
-                    low = float(parts[0].strip())
-                    high = float(parts[1].strip())
+                    low = float(parts[0].strip().replace(',', '.'))
+                    high = float(parts[1].strip().replace(',', '.'))
                     return (low + high) / 2
             except (ValueError, IndexError):
                 return None
@@ -88,12 +107,18 @@ class CompositionMatcher:
         if val1 == 0 and val2 == 0:
             return (True, 0.0)
 
-        # Расчет процентного отклонения
-        max_val = max(abs(val1), abs(val2))
-        if max_val == 0:
-            return (True, 0.0)
+        # Расчет процентного отклонения от эталонного значения (val1)
+        # tolerance_percent = допустимое отклонение от val1 (reference)
+        # Пример: val1=1.40, tolerance=5% → допустимо 1.33-1.47
+        if abs(val1) == 0:
+            # Если эталон = 0, используем абсолютное сравнение
+            # Считаем match если val2 тоже близко к нулю (в пределах 0.01)
+            diff_percent = abs(val2) * 10000  # Большое значение если val2 не ноль
+            is_match = abs(val2) < 0.01
+            return (is_match, diff_percent)
 
-        diff_percent = abs(val1 - val2) / max_val * 100
+        # Стандартный расчет: процент отклонения от эталона
+        diff_percent = abs(val1 - val2) / abs(val1) * 100
 
         is_match = diff_percent <= tolerance_percent
 
@@ -217,6 +242,12 @@ class CompositionMatcher:
 
             # Пропускаем если оба отсутствуют
             if ref_val is None and cand_val is None:
+                continue
+
+            # ВАЖНО: Если у эталона нет данных по элементу, пропускаем
+            # Сравниваем только те элементы, которые присутствуют у эталона
+            # Это стандартная логика Fuzzy Search (мягкая фильтрация)
+            if ref_val is None:
                 continue
 
             # Сравниваем элементы
