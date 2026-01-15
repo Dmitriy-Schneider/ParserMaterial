@@ -22,8 +22,8 @@ async def fuzzy_search_command(update: Update, context: ContextTypes.DEFAULT_TYP
             "`/fuzzy 4140`\n"
             "`/fuzzy 1.2379`\n\n"
             "**Параметры (опционально):**\n"
-            "`/fuzzy <марка> <tolerance> <max_results>`\n"
-            "`/fuzzy HARDOX 500 50 10` - допуск 50%, макс 10 результатов",
+            "`/fuzzy <марка> <tolerance> <max_mismatched>`\n"
+            "`/fuzzy HARDOX 500 50 3` - допуск 50%, макс 3 несовпадающих элемента",
             parse_mode='Markdown'
         )
         return
@@ -31,7 +31,7 @@ async def fuzzy_search_command(update: Update, context: ContextTypes.DEFAULT_TYP
     # Parse arguments
     grade_name = context.args[0]
     tolerance = float(context.args[1]) if len(context.args) > 1 else 50.0
-    max_results = int(context.args[2]) if len(context.args) > 2 else 10
+    max_mismatched = int(context.args[2]) if len(context.args) > 2 else 3
 
     # Validate parameters
     if not (0 <= tolerance <= 100):
@@ -40,16 +40,16 @@ async def fuzzy_search_command(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         return
 
-    if not (1 <= max_results <= 50):
+    if not (0 <= max_mismatched <= 14):
         await update.message.reply_text(
-            "❌ Макс результатов должно быть от 1 до 50"
+            "❌ Макс несовпадающих элементов должно быть от 0 до 14"
         )
         return
 
-    await perform_fuzzy_search(update, grade_name, tolerance, max_results)
+    await perform_fuzzy_search(update, grade_name, tolerance, max_mismatched)
 
 
-async def perform_fuzzy_search(update: Update, grade_name: str, tolerance: float = 50.0, max_results: int = 10):
+async def perform_fuzzy_search(update: Update, grade_name: str, tolerance: float = 50.0, max_mismatched: int = 3):
     """Perform fuzzy search for similar steel grades"""
     try:
         # Send "searching" message
@@ -57,7 +57,7 @@ async def perform_fuzzy_search(update: Update, grade_name: str, tolerance: float
             f"🔗 Ищу марки похожие на `{grade_name}`...\n\n"
             f"▪️ Поиск в базе данных (10,394 марок)\n"
             f"▪️ Сравнение химсостава с допуском {tolerance}%\n"
-            f"▪️ Макс результатов: {max_results}\n\n"
+            f"▪️ Макс несовпадающих элементов: {max_mismatched}\n\n"
             f"⏳ Пожалуйста, подождите...",
             parse_mode='Markdown'
         )
@@ -133,7 +133,7 @@ async def perform_fuzzy_search(update: Update, grade_name: str, tolerance: float
             json={
                 'grade_data': grade_data,
                 'tolerance_percent': tolerance,
-                'max_results': max_results
+                'max_mismatched_elements': max_mismatched
             },
             timeout=30
         )
