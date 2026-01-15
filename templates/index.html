@@ -1334,15 +1334,25 @@
 
         // Search for analogue grade (exact match)
         function searchAnalogue(grade) {
+            // IMPORTANT: Clear auto-search timeout to prevent table refresh
+            clearTimeout(searchTimeout);
+
             // Close any open modals
             closeFuzzyModal();
             closeCompareModal();
 
-            // Clear all filters
-            clearFilters();
-
-            // Set grade filter and search
+            // Set grade filter value (but DON'T call clearFilters as it triggers search)
             document.getElementById('gradeFilter').value = grade;
+
+            // Clear element filters manually without triggering search
+            const elements = ['c', 'cr', 'mo', 'v', 'w', 'co', 'ni', 'mn', 'si', 's', 'p', 'cu', 'nb', 'n'];
+            elements.forEach(element => {
+                document.getElementById(element + '_min').value = '';
+                document.getElementById(element + '_max').value = '';
+            });
+            document.getElementById('standardFilter').value = '';
+
+            // Perform exact search (exact match in database)
             searchExact();
 
             // Scroll to top
