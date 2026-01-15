@@ -50,7 +50,14 @@
       "Bash(docker cp:*)",
       "Bash(del \"c:\\\\Users\\\\dmitr\\\\OneDrive\\\\Desktop\\\\AL\\\\ParserSteel\\\\fix_bohler_country.py\")",
       "Bash(docker restart:*)",
-      "Bash(docker ps:*)"
+      "Bash(docker ps:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker builder prune:*)",
+      "Bash(git reset:*)",
+      "Bash(python3:*)",
+      "Bash(if not exist \"c:\\\\Users\\\\dmitr\\\\OneDrive\\\\Desktop\\\\AL\\\\ParserSteel\\\\parsers\" mkdir \"c:\\\\Users\\\\dmitr\\\\OneDrive\\\\Desktop\\\\AL\\\\ParserSteel\\\\parsers\")",
+      "Bash(git log:*)",
+      "Bash(docker start:*)"
     ]
   }
 }
