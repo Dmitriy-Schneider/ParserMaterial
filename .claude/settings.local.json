@@ -57,7 +57,8 @@
       "Bash(python3:*)",
       "Bash(if not exist \"c:\\\\Users\\\\dmitr\\\\OneDrive\\\\Desktop\\\\AL\\\\ParserSteel\\\\parsers\" mkdir \"c:\\\\Users\\\\dmitr\\\\OneDrive\\\\Desktop\\\\AL\\\\ParserSteel\\\\parsers\")",
       "Bash(git log:*)",
-      "Bash(docker start:*)"
+      "Bash(docker start:*)",
+      "Bash(docker inspect:*)"
     ]
   }
 }

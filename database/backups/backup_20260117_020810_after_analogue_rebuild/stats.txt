@@ -1,0 +1,5 @@
+Total grades: 6982
+With analogues: 6477
+Size: 7.49 MB
+Timestamp: 20260117_020810
+Reason: after_analogue_rebuild
