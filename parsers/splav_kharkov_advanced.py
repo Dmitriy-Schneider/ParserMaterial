@@ -399,7 +399,7 @@ class SplavKharkovParser:
 
             self.stats['new_grades'] += 1
             self.existing_grades.add(grade_data['grade'])
-            logging.info(f"✓ Added new grade: {grade_data['grade']}")
+            logging.info(f"Added new grade: {grade_data['grade']}")
             return True
 
         except Exception as e:
