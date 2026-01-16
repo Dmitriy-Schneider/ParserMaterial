@@ -63,7 +63,7 @@ def get_bs_en_10302_data():
     for grade, comp in ferritic_grades.items():
         steel_grades.append({
             'grade': grade,
-            'standard': 'BS EN 10302-2008',
+            'standard': 'BS EN 10302, Европа',
             'tech': comp.get('tech', 'Ferritic creep resisting steel'),
             'c': comp.get('c'),
             'si': comp.get('si'),
@@ -136,7 +136,7 @@ def get_bs_en_10302_data():
     for grade, comp in austenitic_grades.items():
         steel_grades.append({
             'grade': grade,
-            'standard': 'BS EN 10302-2008',
+            'standard': 'BS EN 10302, Европа',
             'tech': comp.get('tech', 'Austenitic creep resisting steel'),
             'c': comp.get('c'),
             'si': comp.get('si'),
@@ -182,7 +182,7 @@ def get_bs_en_10302_data():
     for grade, comp in nickel_alloys.items():
         steel_grades.append({
             'grade': grade,
-            'standard': 'BS EN 10302-2008',
+            'standard': 'BS EN 10302, Европа',
             'tech': comp.get('tech', 'Nickel-based creep resisting alloy'),
             'c': comp.get('c'),
             'si': comp.get('si'),

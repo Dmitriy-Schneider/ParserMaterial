@@ -239,7 +239,7 @@ def get_gbt_1299_1985_data():
     for grade_name, composition in all_groups.items():
         steel_grade = {
             'grade': grade_name,
-            'standard': 'GB/T 1299-1985',
+            'standard': 'GB/T 1299, Китай',
             'tech': composition.get('group'),
             'c': composition.get('c'),
             'si': composition.get('si'),

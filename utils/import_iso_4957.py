@@ -57,7 +57,7 @@ def get_iso_4957_data():
     for grade, comp in table2_grades.items():
         steel_grades.append({
             'grade': grade,
-            'standard': 'BS-EN-ISO-4957:2000',
+            'standard': 'ISO-4957, Международный',
             'tech': f"Non-alloy cold-work tool steel. Hardening: {comp.get('hardening_temp')}°C/{comp.get('quenching')}",
             'c': comp.get('c'),
             'si': comp.get('si'),
@@ -171,7 +171,7 @@ def get_iso_4957_data():
     for grade, comp in table4_grades.items():
         steel_grades.append({
             'grade': grade,
-            'standard': 'BS-EN-ISO-4957:2000',
+            'standard': 'ISO-4957, Международный',
             'tech': f"Alloy cold-work tool steel. EN 10027-2",
             'c': comp.get('c'),
             'si': comp.get('si'),
@@ -248,7 +248,7 @@ def get_iso_4957_data():
     for grade, comp in table6_grades.items():
         steel_grades.append({
             'grade': grade,
-            'standard': 'BS-EN-ISO-4957:2000',
+            'standard': 'ISO-4957, Международный',
             'tech': f"Hot-work tool steel. Hardening: {comp.get('hardening_temp', '')}°C",
             'c': comp.get('c'),
             'si': comp.get('si'),
@@ -365,7 +365,7 @@ def get_iso_4957_data():
     for grade, comp in table8_grades.items():
         steel_grades.append({
             'grade': grade,
-            'standard': 'BS-EN-ISO-4957:2000',
+            'standard': 'ISO-4957, Международный',
             'tech': f"High-speed tool steel. Hardening: {comp.get('hardening_temp', '')}°C",
             'c': comp.get('c'),
             'si': comp.get('si') if comp.get('si') else None,

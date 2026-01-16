@@ -79,7 +79,7 @@ def get_manufacturer_grades():
         steel_grades.append({
             'grade': grade,
             'manufacturer': 'GMH Gruppe',
-            'standard': 'GMH Proprietary',
+            'standard': 'GMH Proprietary, Германия',
             'c': data.get('c'),
             'cr': data.get('cr'),
             'mo': data.get('mo'),
@@ -104,7 +104,7 @@ def get_manufacturer_grades():
         steel_grades.append({
             'grade': grade,
             'manufacturer': 'Bohler-Uddeholm',
-            'standard': 'Bohler Proprietary',
+            'standard': 'Bohler-Uddeholm, Австрия',
             'c': data.get('c'),
             'cr': data.get('cr'),
             'mo': data.get('mo'),
@@ -152,7 +152,7 @@ def get_manufacturer_grades():
         steel_grades.append({
             'grade': grade,
             'manufacturer': 'Hitachi Metals',
-            'standard': 'Hitachi Proprietary',
+            'standard': 'Hitachi Metals, Япония',
             'c': data.get('c'),
             'cr': data.get('cr'),
             'mo': data.get('mo'),

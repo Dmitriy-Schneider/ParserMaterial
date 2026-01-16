@@ -142,7 +142,7 @@ def get_gbt_9943_2008_data():
     for grade_name, composition in grades_data.items():
         steel_grade = {
             'grade': grade_name,
-            'standard': 'GB/T 9943-2008',
+            'standard': 'GB/T 9943, Китай',
             'tech': f"Unified code: {composition.get('unified_code')}",
             'c': composition.get('c'),
             'mn': composition.get('mn'),

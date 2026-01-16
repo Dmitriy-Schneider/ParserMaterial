@@ -257,22 +257,24 @@ class SplavKharkovParser:
         return ' '.join(analogues[:50])  # Limit to 50 analogues
 
     def parse_standard(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract standard (GOST/DIN/etc) from page"""
+        """Extract standard (GOST/DIN/etc) from page with country information"""
         # Look for GOST mentions
         text = soup.get_text()
 
         # Find ГОСТ references
         gost_matches = re.findall(r'ГОСТ\s+\d+[-–—]\d+', text)
         if gost_matches:
-            return gost_matches[0]
+            return f"{gost_matches[0]}, Россия"
 
-        # Look for other standards
-        for pattern in [r'DIN\s+\d+', r'EN\s+\d+', r'ASTM\s+[A-Z]\d+']:
-            matches = re.findall(pattern, text)
-            if matches:
-                return matches[0]
+        # Look for other standards with countries
+        if re.search(r'DIN\s+\d+', text):
+            return "DIN, Германия"
+        if re.search(r'EN\s+\d+', text):
+            return "EN, Европа"
+        if re.search(r'ASTM\s+[A-Z]\d+', text):
+            return "ASTM, США"
 
-        return 'GOST'  # Default
+        return 'GOST, Россия'  # Default for splav-kharkov.com (Russian site)
 
     def parse_grade_page(self, name_id: int, grade_name: str) -> Optional[Dict]:
         """Parse individual grade page"""

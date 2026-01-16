@@ -20,6 +20,18 @@ import config
 class RussianImporter:
     """Импортер российских марок стали из CSV"""
 
+    # Standard to country mapping
+    STANDARD_COUNTRIES = {
+        'GOST': 'GOST, Россия',
+        'TU': 'TU, Россия',
+        'OST': 'OST, Россия',
+        'AISI': 'AISI, США',
+        'DIN': 'DIN, Германия',
+        'EN': 'EN, Европа',
+        'JIS': 'JIS, Япония',
+        'GB': 'GB, Китай'
+    }
+
     def __init__(self, db_path: str = None):
         """
         Initialize importer
@@ -123,7 +135,7 @@ class RussianImporter:
             'nb': self._clean_value(row.get('Nb')),
             'n': self._clean_value(row.get('N')),
             'tech': self._clean_value(row.get('Tech')),
-            'standard': source,
+            'standard': self.STANDARD_COUNTRIES.get(source, f"{source}, Россия"),  # Add country
             'manufacturer': self._clean_value(row.get('Maker')),
             'analogues': self._clean_value(row.get('CC', '')),  # Cross-country analogues
             'link': None

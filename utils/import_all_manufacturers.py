@@ -33,7 +33,7 @@ def get_chinese_manufacturers():
         steel_grades.append({
             'grade': grade,
             'manufacturer': 'TG Group (Tiangong)',
-            'standard': 'TG Proprietary',
+            'standard': 'TG Proprietary, Китай',
             'c': data.get('c'),
             'cr': data.get('cr'),
             'mo': data.get('mo'),
@@ -60,7 +60,7 @@ def get_chinese_manufacturers():
         steel_grades.append({
             'grade': grade,
             'manufacturer': 'Heye Special Steel',
-            'standard': 'Heye Proprietary',
+            'standard': 'Heye Proprietary, Китай',
             'c': data.get('c'),
             'cr': data.get('cr'),
             'mo': data.get('mo'),
@@ -98,7 +98,7 @@ def get_european_manufacturers():
         steel_grades.append({
             'grade': grade,
             'manufacturer': 'SIJ Metal Ravne',
-            'standard': 'DIN/EN',
+            'standard': 'DIN/EN, Словения',
             'c': data.get('c'),
             'cr': data.get('cr'),
             'mo': data.get('mo'),
@@ -121,7 +121,7 @@ def get_european_manufacturers():
         steel_grades.append({
             'grade': grade,
             'manufacturer': 'Rovalma S.A.',
-            'standard': 'Rovalma Proprietary',
+            'standard': 'Rovalma Proprietary, Испания',
             'c': data.get('c'),
             'cr': data.get('cr'),
             'mo': data.get('mo'),
@@ -144,7 +144,7 @@ def get_european_manufacturers():
         steel_grades.append({
             'grade': grade,
             'manufacturer': 'Sandvik',
-            'standard': 'Sandvik Proprietary',
+            'standard': 'Sandvik Proprietary, Швеция',
             'c': data.get('c'),
             'cr': data.get('cr'),
             'mn': data.get('mn'),
@@ -186,7 +186,7 @@ def get_stainless_manufacturers():
         steel_grades.append({
             'grade': grade,
             'manufacturer': 'Outokumpu',
-            'standard': 'ASTM/EN',
+            'standard': 'ASTM/EN, Финляндия',
             'c': data.get('c'),
             'cr': data.get('cr'),
             'ni': data.get('ni'),
