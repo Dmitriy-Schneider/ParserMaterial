@@ -1,0 +1,5 @@
+Total grades: 8918
+With analogues: 6477
+Size: 8.25 MB
+Timestamp: 20260117_030004
+Reason: before_standard_fix_from_chemistry

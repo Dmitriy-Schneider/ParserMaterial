@@ -283,24 +283,78 @@ class SplavKharkovParser:
         return ''
 
     def parse_standard(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract standard (GOST/DIN/etc) from page with country information"""
-        # Look for GOST mentions
-        text = soup.get_text()
+        """Extract standard (GOST/DIN/etc) from chemistry section with country information"""
 
-        # Find ГОСТ references
-        gost_matches = re.findall(r'ГОСТ\s+\d+[-–—]\d+', text)
-        if gost_matches:
-            return f"{gost_matches[0]}, Россия"
+        # Priority 1: Look for GOST in chemistry composition section
+        # Find chemistry table first
+        chemistry_table = soup.find('table', class_='table_chemical')
+        if not chemistry_table:
+            # Try alternative table structure
+            for table in soup.find_all('table'):
+                if 'химический состав' in table.get_text().lower():
+                    chemistry_table = table
+                    break
 
-        # Look for other standards with countries
-        if re.search(r'DIN\s+\d+', text):
-            return "DIN, Германия"
-        if re.search(r'EN\s+\d+', text):
-            return "EN, Европа"
-        if re.search(r'ASTM\s+[A-Z]\d+', text):
-            return "ASTM, США"
+        if chemistry_table:
+            # Look for GOST before the chemistry table (most common location)
+            prev_elements = []
+            current = chemistry_table.find_previous_sibling()
+            # Check up to 3 previous siblings
+            for _ in range(3):
+                if current:
+                    prev_elements.append(current)
+                    current = current.find_previous_sibling()
+                else:
+                    break
 
-        return 'GOST, Россия'  # Default for splav-kharkov.com (Russian site)
+            # Search in previous elements
+            for element in prev_elements:
+                text = element.get_text()
+                # Look for GOST with number (e.g., ГОСТ 5950, ГОСТ 5950-2000)
+                gost_matches = re.findall(r'ГОСТ\s+\d+[-–—]?\d*', text)
+                if gost_matches:
+                    # Return first match from chemistry section
+                    return f"{gost_matches[0]}, Россия"
+
+            # Also check in table caption or first row
+            caption = chemistry_table.find('caption')
+            if caption:
+                text = caption.get_text()
+                gost_matches = re.findall(r'ГОСТ\s+\d+[-–—]?\d*', text)
+                if gost_matches:
+                    return f"{gost_matches[0]}, Россия"
+
+        # Priority 2: Look for "Химический состав" heading and check nearby text
+        for element in soup.find_all(string=re.compile(r'Химический состав', re.IGNORECASE)):
+            parent = element.find_parent()
+            if parent:
+                # Check in the same element and next few siblings
+                for sibling in [parent] + list(parent.find_next_siblings(limit=3)):
+                    text = sibling.get_text()
+                    gost_matches = re.findall(r'ГОСТ\s+\d+[-–—]?\d*', text)
+                    if gost_matches:
+                        return f"{gost_matches[0]}, Россия"
+
+        # Priority 3: Check for other standards in chemistry section
+        if chemistry_table:
+            nearby_text = []
+            current = chemistry_table.find_previous_sibling()
+            for _ in range(3):
+                if current:
+                    nearby_text.append(current.get_text())
+                    current = current.find_previous_sibling()
+
+            full_text = ' '.join(nearby_text)
+
+            if re.search(r'DIN\s+\d+', full_text):
+                return "DIN, Германия"
+            if re.search(r'EN\s+\d+', full_text):
+                return "EN, Европа"
+            if re.search(r'ASTM\s+[A-Z]\d+', full_text):
+                return "ASTM, США"
+
+        # Default: GOST without specific number
+        return 'GOST, Россия'
 
     def parse_grade_page(self, name_id: int, grade_name: str) -> Optional[Dict]:
         """Parse individual grade page"""
