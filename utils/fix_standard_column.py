@@ -1,169 +1,126 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Fix Standard Column Script
-===========================
-Fixes incorrect Standard values:
-- "AISI (Austenitic)" → "AISI, США"
-- "GOST/TU-Extended" → "GOST, Россия"
-- "UNS (Austenitic)" → "UNS, США"
-- etc.
-"""
-
+"""Fix Standard column issues"""
 import sqlite3
-import logging
-from typing import Dict, List, Tuple
+import re
+from pathlib import Path
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('fix_standard_column.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
+db_path = Path(__file__).parent.parent / 'database' / 'steel_database.db'
+conn = sqlite3.connect(db_path)
+cursor = conn.cursor()
 
-class StandardFixer:
-    # Mapping of incorrect patterns to correct values
-    STANDARD_FIXES = {
-        # AISI variations
-        'AISI (Austenitic)': 'AISI, США',
-        'AISI (Martensitic)': 'AISI, США',
-        'AISI (Ferritic)': 'AISI, США',
-        'AISI (Duplex)': 'AISI, США',
-        'AISI (PH)': 'AISI, США',
+print("="*100)
+print("FIXING STANDARD COLUMN")
+print("="*100)
 
-        # UNS variations
-        'UNS (Austenitic)': 'UNS, США',
-        'UNS (Martensitic)': 'UNS, США',
-        'UNS (Ferritic)': 'UNS, США',
-        'UNS (Duplex)': 'UNS, США',
-        'UNS (PH)': 'UNS, США',
+# Counters
+fixed_wnr = 0
+fixed_din_duplicates = 0
+fixed_aisi_duplicates = 0
 
-        # EN variations
-        'EN (Austenitic)': 'EN, Европа',
-        'EN (Martensitic)': 'EN, Европа',
-        'EN (Ferritic)': 'EN, Европа',
-        'EN (Duplex)': 'EN, Европа',
+# 1. Fix W-Nr grades (format: N.NNNN - digit.digits, no letters)
+print("\n1. Fixing W-Nr grades (format: N.NNNN)...")
+print("-" * 100)
 
-        # GOST variations
-        'GOST/TU-Extended': 'GOST, Россия',
-        'GOST Extended': 'GOST, Россия',
-        'GOST/TU': 'GOST, Россия',
+# Get all grades with dot that are purely numeric
+cursor.execute("""
+    SELECT grade, standard
+    FROM steel_grades
+    WHERE grade LIKE '%.%'
+      AND (standard LIKE '%DIN%' OR standard LIKE '%W-Nr%')
+""")
 
-        # Other
-        'Nb: 10×C to 1.0': 'EN, Европа',  # Wrong format
-    }
+wnr_grades = cursor.fetchall()
 
-    def __init__(self, db_path: str = 'database/steel_database.db'):
-        self.db_path = db_path
-        self.conn = sqlite3.connect(db_path)
-        self.cursor = self.conn.cursor()
-        self.stats = {
-            'total_fixed': 0,
-            'by_pattern': {}
-        }
+for grade, standard in wnr_grades:
+    # Check if grade is purely numeric (digits and dot only)
+    if re.match(r'^\d+\.\d+$', grade):
+        # Check if already correct
+        if standard != 'W-Nr (DIN), Германия':
+            cursor.execute(
+                "UPDATE steel_grades SET standard = ? WHERE grade = ?",
+                ('W-Nr (DIN), Германия', grade)
+            )
+            fixed_wnr += 1
 
-    def find_incorrect_standards(self) -> List[Tuple]:
-        """Find all incorrect standard values"""
-        self.cursor.execute("""
-            SELECT DISTINCT standard FROM steel_grades
-            WHERE standard IS NOT NULL AND standard != ''
-            ORDER BY standard
-        """)
-        all_standards = [row[0] for row in self.cursor.fetchall()]
+            if fixed_wnr <= 5:  # Show first 5 examples
+                print(f"   {grade:20s}: '{standard}' -> 'W-Nr (DIN), Германия'")
 
-        incorrect = []
-        for std in all_standards:
-            # Check if it matches any incorrect pattern
-            if std in self.STANDARD_FIXES:
-                incorrect.append(std)
-            # Check for patterns with parentheses or Extended
-            elif '(' in std or 'Extended' in std:
-                incorrect.append(std)
+print(f"\n   Fixed {fixed_wnr} W-Nr grades")
 
-        logging.info(f"Found {len(incorrect)} distinct incorrect standard values")
-        return incorrect
+# 2. Fix DIN alphanumeric grades - remove duplicated grade name
+print("\n2. Fixing DIN grades with duplicated grade name...")
+print("-" * 100)
 
-    def fix_gost_patterns(self):
-        """Fix all GOST standards with (A), (Б), etc."""
-        # Fix all GOST with parentheses
-        self.cursor.execute("""
-            UPDATE steel_grades
-            SET standard = 'GOST, Россия'
-            WHERE standard LIKE 'GOST %(%'
-        """)
-        count = self.cursor.rowcount
-        if count > 0:
-            logging.info(f"  Fixed {count} GOST grades with parentheses")
-            self.stats['total_fixed'] += count
-            self.stats['by_pattern']['GOST patterns'] = count
+cursor.execute("""
+    SELECT grade, standard
+    FROM steel_grades
+    WHERE standard LIKE '%DIN%'
+      AND standard != 'DIN, Германия'
+      AND standard != 'W-Nr (DIN), Германия'
+""")
 
-    def fix_standard(self, old_value: str, new_value: str) -> int:
-        """Fix all grades with old standard value"""
-        self.cursor.execute("""
-            UPDATE steel_grades
-            SET standard = ?
-            WHERE standard = ?
-        """, (new_value, old_value))
+din_grades = cursor.fetchall()
 
-        count = self.cursor.rowcount
-        self.stats['by_pattern'][old_value] = count
-        self.stats['total_fixed'] += count
+for grade, standard in din_grades:
+    if not standard:
+        continue
 
-        return count
+    # Check if grade name is duplicated in standard
+    # Examples: "DIN X155CRVMO121" or "DIN 2.4360"
+    if grade.upper() in standard.upper().replace(' ', ''):
+        # Remove duplicate, keep only "DIN, Германия"
+        cursor.execute(
+            "UPDATE steel_grades SET standard = ? WHERE grade = ?",
+            ('DIN, Германия', grade)
+        )
+        fixed_din_duplicates += 1
 
-    def run_fix(self):
-        """Run fixing process"""
-        logging.info("\n" + "="*80)
-        logging.info("STANDARD COLUMN FIXER - STARTING")
-        logging.info("="*80)
+        if fixed_din_duplicates <= 5:  # Show first 5 examples
+            print(f"   {grade:20s}: '{standard}' -> 'DIN, Германия'")
 
-        # Find all incorrect standards
-        incorrect = self.find_incorrect_standards()
+print(f"\n   Fixed {fixed_din_duplicates} DIN grades")
 
-        if not incorrect:
-            logging.info("No incorrect standards found")
-            self.conn.close()
-            return
+# 3. Fix AISI grades - remove duplicated grade name
+print("\n3. Fixing AISI grades with duplicated grade name...")
+print("-" * 100)
 
-        logging.info("\nIncorrect standard values found:")
-        for std in incorrect:
-            logging.info(f"  - {std}")
+cursor.execute("""
+    SELECT grade, standard
+    FROM steel_grades
+    WHERE standard LIKE '%AISI%'
+      AND standard != 'AISI, США'
+""")
 
-        # Fix known patterns
-        logging.info("\nFixing known patterns...")
-        for old_value, new_value in self.STANDARD_FIXES.items():
-            count = self.fix_standard(old_value, new_value)
-            if count > 0:
-                logging.info(f"  '{old_value}' → '{new_value}': {count} grades")
+aisi_grades = cursor.fetchall()
 
-        # Fix GOST patterns with parentheses
-        logging.info("\nFixing GOST patterns...")
-        self.fix_gost_patterns()
+for grade, standard in aisi_grades:
+    if not standard:
+        continue
 
-        # Commit changes
-        self.conn.commit()
+    # Check if grade name is in standard (e.g., "AISI H11" should be "AISI")
+    if grade in standard:
+        # Remove duplicate, keep only "AISI, США"
+        cursor.execute(
+            "UPDATE steel_grades SET standard = ? WHERE grade = ?",
+            ('AISI, США', grade)
+        )
+        fixed_aisi_duplicates += 1
 
-        # Print statistics
-        logging.info("\n" + "="*80)
-        logging.info("FIXING STATISTICS")
-        logging.info("="*80)
-        logging.info(f"Total grades fixed: {self.stats['total_fixed']}")
-        logging.info("="*80)
+        if fixed_aisi_duplicates <= 5:  # Show first 5 examples
+            print(f"   {grade:20s}: '{standard}' -> 'AISI, США'")
 
-        # Show examples
-        logging.info("\nExamples after fixing:")
-        self.cursor.execute("""
-            SELECT grade, standard FROM steel_grades
-            WHERE standard IN ('AISI, США', 'UNS, США', 'EN, Европа', 'GOST, Россия')
-            LIMIT 20
-        """)
-        for grade, standard in self.cursor.fetchall():
-            logging.info(f"  {grade:<20} → {standard}")
+print(f"\n   Fixed {fixed_aisi_duplicates} AISI grades")
 
-        self.conn.close()
+# Commit changes
+conn.commit()
 
-if __name__ == '__main__':
-    fixer = StandardFixer()
-    fixer.run_fix()
+# Summary
+print("\n" + "="*100)
+print("SUMMARY")
+print("="*100)
+print(f"1. W-Nr grades (N.NNNN) fixed: {fixed_wnr}")
+print(f"2. DIN grades (remove duplicates) fixed: {fixed_din_duplicates}")
+print(f"3. AISI grades (remove duplicates) fixed: {fixed_aisi_duplicates}")
+print(f"\nTotal fixes: {fixed_wnr + fixed_din_duplicates + fixed_aisi_duplicates}")
+print("\nChanges committed to database.")
+
+conn.close()
