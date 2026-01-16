@@ -65,11 +65,13 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(
             "📊 **Поиск схожих марок**\n\n"
             "Отправьте марку и параметры:\n"
-            "`Марка Tolerance% MaxResults`\n\n"
-            "Примеры:\n"
-            "• `HARDOX 500 10 5` - схожесть 10%, показать 5 марок\n"
-            "• `Х12МФ 5 3` - схожесть 5%, показать 3 марки\n"
-            "• `D2` - схожесть 50% (по умолчанию), 1 марка",
+            "`Марка Tolerance% MaxMismatched`\n\n"
+            "**Tolerance** = допуск отклонения каждого элемента (%)\n"
+            "**MaxMismatched** = количество элементов с отклонением выше допуска\n\n"
+            "**Примеры:**\n"
+            "• `HARDOX 500 10 2` - допуск 10%, макс 2 элемента с отклонением\n"
+            "• `Х12МФ 5 3` - допуск 5%, макс 3 элемента с отклонением\n"
+            "• `D2` - допуск 50%, макс 3 элемента (по умолчанию)",
             parse_mode='Markdown'
         )
         return
@@ -109,12 +111,12 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         # User sent grade and parameters after clicking "📊 Схожие" button
         context.user_data['waiting_for'] = None
         from . import fuzzy_search
-        # Parse parameters: grade tolerance max_results
+        # Parse parameters: grade tolerance max_mismatched
         parts = message_text.split()
         grade = parts[0] if len(parts) > 0 else message_text
         tolerance = parts[1] if len(parts) > 1 else "50"
-        max_results = parts[2] if len(parts) > 2 else "1"
-        context.args = [grade, tolerance, max_results]
+        max_mismatched = parts[2] if len(parts) > 2 else "3"
+        context.args = [grade, tolerance, max_mismatched]
         await fuzzy_search.fuzzy_search_command(update, context)
         return
 
@@ -164,8 +166,8 @@ async def handle_text_message(update: Update, context: ContextTypes.DEFAULT_TYPE
         from . import fuzzy_search
         # Manually set args for fuzzy_search command
         tolerance = analysis.get('tolerance') or 50
-        max_results = analysis.get('max_results') or 1
-        context.args = [grade, str(tolerance), str(max_results)]
+        max_mismatched = analysis.get('max_mismatched') or 3
+        context.args = [grade, str(tolerance), str(max_mismatched)]
         await fuzzy_search.fuzzy_search_command(update, context)
         return
 
@@ -453,7 +455,9 @@ def format_steel_result(result: dict, index: int = 1, total: int = 1) -> str:
         if 'не найден' in str(analogues).lower() or 'уникальная' in str(analogues).lower():
             lines.append(f"\n🔗 **Аналоги:** _Аналоги не найдены (уникальная марка)_")
         elif analogues not in [None, '', 'N/A', 'null']:
-            lines.append(f"\n🔗 **Аналоги:** {analogues}")
+            # Format analogues with comma separator for better readability
+            formatted_analogues = analogues.replace(' ', ', ')
+            lines.append(f"\n🔗 **Аналоги:** {formatted_analogues}")
 
     # Application (if available from AI)
     application = result.get('application')

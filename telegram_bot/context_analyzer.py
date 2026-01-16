@@ -59,7 +59,7 @@ Possible intents:
 For "fuzzy_search" intent, extract:
 - grade: steel grade name
 - tolerance: percentage value (if mentioned with %, otherwise null). Default is 50%.
-- max_results: number after tolerance (if mentioned, otherwise null). Default is 1.
+- max_mismatched: number of elements allowed to exceed tolerance (if mentioned, otherwise null). Default is 3.
 
 For "compare" intent, extract:
 - grades: list of steel grade names to compare (2-5 grades)
@@ -67,10 +67,10 @@ For "compare" intent, extract:
 Examples:
 - "найди 420" → intent: search, grade: 420
 - "аналоги D2" → intent: analogues, grade: D2
-- "похожая марка HARDOX 500" → intent: fuzzy_search, grade: HARDOX 500, tolerance: null, max_results: null
-- "найди похожую HARDOX 500 30%" → intent: fuzzy_search, grade: HARDOX 500, tolerance: 30, max_results: null
-- "схожая 4140 50% 10" → intent: fuzzy_search, grade: 4140, tolerance: 50, max_results: 10
-- "похожие марки на D2 25% 5" → intent: fuzzy_search, grade: D2, tolerance: 25, max_results: 5
+- "похожая марка HARDOX 500" → intent: fuzzy_search, grade: HARDOX 500, tolerance: null, max_mismatched: null
+- "найди похожую HARDOX 500 30%" → intent: fuzzy_search, grade: HARDOX 500, tolerance: 30, max_mismatched: null
+- "схожая 4140 50% 2" → intent: fuzzy_search, grade: 4140, tolerance: 50, max_mismatched: 2
+- "похожие марки на D2 25% 3" → intent: fuzzy_search, grade: D2, tolerance: 25, max_mismatched: 3
 - "сравни Х12МФ и D2" → intent: compare, grades: ["Х12МФ", "D2"]
 - "compare 4140 with AISI 4140" → intent: compare, grades: ["4140", "AISI 4140"]
 - "сравнить HARDOX 500 и AR500" → intent: compare, grades: ["HARDOX 500", "AR500"]
@@ -152,14 +152,14 @@ Return ONLY valid JSON:
                 tolerance = int(tolerance_match.group(1))
                 text = text.replace(tolerance_match.group(0), '').strip()
 
-            # Extract max_results (number after tolerance)
-            max_results = None
+            # Extract max_mismatched (number after tolerance)
+            max_mismatched = None
             numbers = re.findall(r'\b(\d+)\b', text)
             if numbers:
-                max_results = int(numbers[-1]) if len(numbers) > 0 else None
+                max_mismatched = int(numbers[-1]) if len(numbers) > 0 else None
                 # Remove the last number from text
-                if max_results:
-                    text = re.sub(r'\b' + str(max_results) + r'\b', '', text, count=1).strip()
+                if max_mismatched:
+                    text = re.sub(r'\b' + str(max_mismatched) + r'\b', '', text, count=1).strip()
 
             # Remaining text is grade name
             grade = text.strip()
@@ -168,7 +168,7 @@ Return ONLY valid JSON:
                 'intent': 'fuzzy_search',
                 'grade': grade if grade else None,
                 'tolerance': tolerance,
-                'max_results': max_results,
+                'max_mismatched': max_mismatched,
                 'confidence': 0.7
             }
 
