@@ -235,26 +235,52 @@ class SplavKharkovParser:
         return composition
 
     def parse_analogues(self, soup: BeautifulSoup) -> str:
-        """Extract foreign analogues from page"""
+        """Extract foreign analogues from page and validate against DB"""
         analogues = []
 
-        # Find analogues section
-        # Common patterns: "Зарубежные аналоги", "Foreign analogues", table with country codes
+        # Find "Зарубежные аналоги" section specifically
+        for element in soup.find_all(text=re.compile(r'Зарубежные аналоги', re.IGNORECASE)):
+            # Find parent element and then find next table
+            parent = element.find_parent()
+            if parent:
+                # Look for table after this header
+                table = parent.find_next('table')
+                if table:
+                    # Extract all grade designations from table
+                    for cell in table.find_all(['td', 'th']):
+                        text = cell.get_text(strip=True)
+                        # Skip headers, country names, and empty cells
+                        if text and len(text) < 30:
+                            # Skip common headers
+                            skip_words = ['usa', 'germany', 'japan', 'france', 'uk', 'china',
+                                        'гост', 'аналог', 'country', 'страна', 'марка', 'grade',
+                                        'россия', 'germany', 'германия', 'япония']
+                            if any(x in text.lower() for x in skip_words):
+                                continue
 
-        for table in soup.find_all('table'):
-            table_text = table.get_text().lower()
-            if 'аналог' in table_text or 'analogue' in table_text or 'usa' in table_text:
-                # Extract all grade designations from table
-                for cell in table.find_all(['td', 'th']):
-                    text = cell.get_text(strip=True)
-                    # Skip headers and country names
-                    if text and len(text) < 30 and not any(x in text.lower() for x in ['usa', 'germany', 'japan', 'france', 'uk', 'гост', 'аналог']):
-                        # Check if looks like a grade (contains numbers and letters)
-                        if re.search(r'[A-Za-z]', text) and re.search(r'\d', text):
-                            if text not in analogues:
-                                analogues.append(text)
+                            # Check if looks like a grade (contains letters and/or numbers)
+                            if re.search(r'[A-Za-zА-Я0-9]', text):
+                                # Clean the text
+                                grade = text.strip().replace('®', '').replace('™', '')
+                                if grade and grade not in analogues:
+                                    analogues.append(grade)
 
-        return ' '.join(analogues[:50])  # Limit to 50 analogues
+        # Validate analogues against database - only include grades that exist in DB
+        if analogues:
+            conn = get_connection()
+            cursor = conn.cursor()
+
+            validated_analogues = []
+            for analogue in analogues:
+                cursor.execute("SELECT 1 FROM steel_grades WHERE grade = ?", (analogue,))
+                if cursor.fetchone():
+                    validated_analogues.append(analogue)
+
+            conn.close()
+
+            return ' '.join(validated_analogues[:50])  # Limit to 50 analogues
+
+        return ''
 
     def parse_standard(self, soup: BeautifulSoup) -> Optional[str]:
         """Extract standard (GOST/DIN/etc) from page with country information"""
@@ -308,26 +334,37 @@ class SplavKharkovParser:
             existing = cursor.fetchone()
 
             if existing:
-                # Update analogues if new ones found
+                # Update chemistry and analogues for existing grade
                 existing_analogues = existing[1] or ''
                 new_analogues = grade_data['analogues']
 
+                # Combine analogues
                 if new_analogues and new_analogues not in existing_analogues:
                     combined_analogues = f"{existing_analogues} {new_analogues}".strip()
-                    cursor.execute("""
-                        UPDATE steel_grades
-                        SET analogues = ?
-                        WHERE grade = ?
-                    """, (combined_analogues, grade_data['grade']))
-                    conn.commit()
-                    conn.close()
-
-                    self.stats['updated_analogues'] += 1
-                    logging.info(f"Updated analogues for {grade_data['grade']}")
-                    return True
                 else:
-                    conn.close()
-                    return False
+                    combined_analogues = existing_analogues
+
+                # Update grade with chemistry and analogues
+                comp = grade_data['composition']
+                cursor.execute("""
+                    UPDATE steel_grades
+                    SET c = ?, cr = ?, ni = ?, mo = ?, v = ?, w = ?, co = ?,
+                        mn = ?, si = ?, cu = ?, nb = ?, n = ?, s = ?, p = ?,
+                        analogues = ?, standard = ?
+                    WHERE grade = ?
+                """, (
+                    comp.get('c'), comp.get('cr'), comp.get('ni'), comp.get('mo'),
+                    comp.get('v'), comp.get('w'), comp.get('co'), comp.get('mn'),
+                    comp.get('si'), comp.get('cu'), comp.get('nb'), comp.get('n'),
+                    comp.get('s'), comp.get('p'), combined_analogues,
+                    grade_data['standard'], grade_data['grade']
+                ))
+                conn.commit()
+                conn.close()
+
+                self.stats['updated_analogues'] += 1
+                logging.info(f"Updated chemistry for {grade_data['grade']}")
+                return True
 
             # Insert new grade
             comp = grade_data['composition']
