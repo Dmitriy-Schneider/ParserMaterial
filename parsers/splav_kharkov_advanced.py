@@ -225,30 +225,54 @@ class SplavKharkovParser:
                     # First tr should be headers
                     header_row = all_trs[0]
                     headers = []
-                    for cell in header_row.find_all(['th', 'td', 'b']):
+
+                    # Only find td/th cells, not nested b tags
+                    for idx, cell in enumerate(header_row.find_all(['th', 'td'])):
                         text = cell.get_text(strip=True).upper()
-                        if text and len(text) <= 3 and text not in ['-', '–']:
-                            headers.append(text)
+                        headers.append(text if text else '')
 
                     # Second tr should be values
                     if len(all_trs) > 1 and headers:
                         value_row = all_trs[1]
-                        cells = value_row.find_all(['td', 'th', 'b'])
+                        cells = value_row.find_all(['td', 'th'])
 
+                        # Standard element map (for columns in DB)
                         element_map = {
                             'C': 'c', 'SI': 'si', 'MN': 'mn', 'NI': 'ni',
                             'S': 's', 'P': 'p', 'CR': 'cr', 'CU': 'cu',
                             'MO': 'mo', 'V': 'v', 'W': 'w', 'CO': 'co',
-                            'NB': 'nb', 'N': 'n', 'TI': 'ti', 'AL': 'al'
+                            'NB': 'nb', 'N': 'n'
                         }
 
+                        # Process each cell
                         for i, header in enumerate(headers):
-                            if i < len(cells) and header in element_map:
-                                value = cells[i].get_text(strip=True)
-                                value = value.replace(',', '.')
-                                value = re.sub(r'\s+', ' ', value)
+                            if i >= len(cells):
+                                continue
 
-                                if value and value not in ['-', '–', '—', 'не более']:
+                            cell = cells[i]
+                            value = cell.get_text(strip=True)
+                            value = value.replace(',', '.')
+                            value = re.sub(r'\s+', ' ', value)
+
+                            # Skip empty or dash-only values
+                            if not value or value in ['-', '–', '—']:
+                                continue
+
+                            # Check if this is the "other" column (dash header or last column with content)
+                            is_other_column = header in ['-', '–', '—', ''] and value not in ['-', '–', '—', 'не более']
+
+                            if is_other_column:
+                                # This is the "other" column with additional elements like Ti, Al, etc.
+                                # Remove "остальное Fe" and similar phrases
+                                other_value = re.sub(r',?\s*остальное\s+Fe\s*', '', value, flags=re.IGNORECASE)
+                                other_value = re.sub(r',?\s*остальное\s*', '', other_value, flags=re.IGNORECASE)
+                                other_value = other_value.strip(' ,;.')
+
+                                if other_value and other_value not in ['-', '–', '—']:
+                                    composition['other'] = other_value
+                            elif header in element_map:
+                                # Standard chemical element
+                                if value not in ['-', '–', '—', 'не более']:
                                     composition[element_map[header]] = value
 
                     if composition:  # Found composition, return
@@ -269,8 +293,8 @@ class SplavKharkovParser:
             if header_row:
                 for th in header_row.find_all(['th', 'td']):
                     text = th.get_text(strip=True)
-                    if text and len(text) <= 3:
-                        headers.append(text.upper())
+                    # Allow dash as header for "other" column
+                    headers.append(text.upper() if text else '')
 
             # Extract values
             value_rows = table.find_all('tr')[1:]
@@ -286,12 +310,30 @@ class SplavKharkovParser:
                         }
 
                         for i, header in enumerate(headers):
-                            if i < len(cells) and header in element_map:
-                                value = cells[i].get_text(strip=True)
-                                value = value.replace(',', '.')
-                                value = re.sub(r'\s+', ' ', value)
+                            if i >= len(cells):
+                                continue
 
-                                if value and value not in ['-', '–', '—', 'не более']:
+                            value = cells[i].get_text(strip=True)
+                            value = value.replace(',', '.')
+                            value = re.sub(r'\s+', ' ', value)
+
+                            # Skip empty or dash-only values
+                            if not value or value in ['-', '–', '—']:
+                                continue
+
+                            # Check if this is the "other" column
+                            is_other_column = header in ['-', '–', '—', ''] and value not in ['-', '–', '—', 'не более']
+
+                            if is_other_column:
+                                # Remove "остальное Fe" and similar phrases
+                                other_value = re.sub(r',?\s*остальное\s+Fe\s*', '', value, flags=re.IGNORECASE)
+                                other_value = re.sub(r',?\s*остальное\s*', '', other_value, flags=re.IGNORECASE)
+                                other_value = other_value.strip(' ,;.')
+
+                                if other_value and other_value not in ['-', '–', '—']:
+                                    composition['other'] = other_value
+                            elif header in element_map:
+                                if value not in ['-', '–', '—', 'не более']:
                                     composition[element_map[header]] = value
 
         return composition
@@ -489,14 +531,14 @@ class SplavKharkovParser:
                     UPDATE steel_grades
                     SET c = ?, cr = ?, ni = ?, mo = ?, v = ?, w = ?, co = ?,
                         mn = ?, si = ?, cu = ?, nb = ?, n = ?, s = ?, p = ?,
-                        analogues = ?, standard = ?
+                        analogues = ?, standard = ?, tech = ?
                     WHERE grade = ?
                 """, (
                     comp.get('c'), comp.get('cr'), comp.get('ni'), comp.get('mo'),
                     comp.get('v'), comp.get('w'), comp.get('co'), comp.get('mn'),
                     comp.get('si'), comp.get('cu'), comp.get('nb'), comp.get('n'),
                     comp.get('s'), comp.get('p'), combined_analogues,
-                    grade_data['standard'], grade_data['grade']
+                    grade_data['standard'], comp.get('other'), grade_data['grade']
                 ))
                 conn.commit()
                 conn.close()
@@ -510,8 +552,8 @@ class SplavKharkovParser:
 
             cursor.execute("""
                 INSERT INTO steel_grades
-                (grade, standard, c, cr, ni, mo, v, w, co, mn, si, cu, nb, n, s, p, analogues, link)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (grade, standard, c, cr, ni, mo, v, w, co, mn, si, cu, nb, n, s, p, analogues, tech, link)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 grade_data['grade'],
                 grade_data['standard'],
@@ -530,6 +572,7 @@ class SplavKharkovParser:
                 comp.get('s'),
                 comp.get('p'),
                 grade_data['analogues'],
+                comp.get('other'),
                 f"{BASE_URL}/mat_start.php?name_id={grade_data.get('name_id', '')}"
             ))
 
