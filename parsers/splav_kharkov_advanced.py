@@ -64,11 +64,25 @@ MATERIAL_TYPES = {
 class SplavKharkovParser:
     """Advanced parser for splav-kharkov.com"""
 
+    # Multiple User-Agents for rotation
+    USER_AGENTS = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0 Safari/537.36'
+    ]
+
     def __init__(self, db_path: str = 'steel_grades.db'):
         self.db_path = db_path
         self.session = requests.Session()
+        self.user_agent_index = 0
         self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': self.USER_AGENTS[0],
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1'
         })
 
         # Track existing grades to avoid duplicates
@@ -97,13 +111,18 @@ class SplavKharkovParser:
         """Fetch and parse page with retries"""
         for attempt in range(retries):
             try:
-                response = self.session.get(url, timeout=15)
+                # Rotate User-Agent on each retry
+                if attempt > 0:
+                    self.user_agent_index = (self.user_agent_index + 1) % len(self.USER_AGENTS)
+                    self.session.headers['User-Agent'] = self.USER_AGENTS[self.user_agent_index]
+
+                response = self.session.get(url, timeout=30)
                 response.raise_for_status()
                 response.encoding = 'utf-8'
                 return BeautifulSoup(response.text, 'html.parser')
             except Exception as e:
                 logging.warning(f"Attempt {attempt + 1}/{retries} failed for {url}: {e}")
-                time.sleep(2 * (attempt + 1))
+                time.sleep(3 * (attempt + 1))
 
         logging.error(f"Failed to fetch {url} after {retries} attempts")
         return None
@@ -185,15 +204,62 @@ class SplavKharkovParser:
         return grades
 
     def parse_chemical_composition(self, soup: BeautifulSoup) -> Dict[str, Optional[str]]:
-        """Extract chemical composition from page"""
+        """Extract chemical composition from page (handles malformed HTML with orphaned tr elements)"""
         composition = {}
 
-        # Find composition table
+        # Priority 1: Find "Химический состав" heading and look for orphaned <tr> elements after it
+        for element in soup.find_all(string=re.compile(r'Химический состав', re.IGNORECASE)):
+            parent = element.find_parent()
+            if parent:
+                # Find all <tr> elements that come after this heading (may be orphaned outside table)
+                all_trs = []
+
+                # Look for next <tr> siblings (orphaned rows)
+                next_el = parent.find_next('tr')
+                while next_el and len(all_trs) < 5:  # Limit to 5 rows
+                    all_trs.append(next_el)
+                    next_el = next_el.find_next_sibling('tr')
+
+                # If we found orphaned rows, parse them
+                if len(all_trs) >= 2:  # Need at least header + values
+                    # First tr should be headers
+                    header_row = all_trs[0]
+                    headers = []
+                    for cell in header_row.find_all(['th', 'td', 'b']):
+                        text = cell.get_text(strip=True).upper()
+                        if text and len(text) <= 3 and text not in ['-', '–']:
+                            headers.append(text)
+
+                    # Second tr should be values
+                    if len(all_trs) > 1 and headers:
+                        value_row = all_trs[1]
+                        cells = value_row.find_all(['td', 'th', 'b'])
+
+                        element_map = {
+                            'C': 'c', 'SI': 'si', 'MN': 'mn', 'NI': 'ni',
+                            'S': 's', 'P': 'p', 'CR': 'cr', 'CU': 'cu',
+                            'MO': 'mo', 'V': 'v', 'W': 'w', 'CO': 'co',
+                            'NB': 'nb', 'N': 'n', 'TI': 'ti', 'AL': 'al'
+                        }
+
+                        for i, header in enumerate(headers):
+                            if i < len(cells) and header in element_map:
+                                value = cells[i].get_text(strip=True)
+                                value = value.replace(',', '.')
+                                value = re.sub(r'\s+', ' ', value)
+
+                                if value and value not in ['-', '–', '—', 'не более']:
+                                    composition[element_map[header]] = value
+
+                    if composition:  # Found composition, return
+                        return composition
+
+        # Priority 2: Try finding table with chemistry data (old method)
         table = soup.find('table', class_='table_chemical')
         if not table:
-            # Try alternative table structure
-            for table in soup.find_all('table'):
-                if 'химический состав' in table.get_text().lower():
+            for t in soup.find_all('table'):
+                if 'химический состав' in t.get_text().lower():
+                    table = t
                     break
 
         if table:
@@ -203,34 +269,30 @@ class SplavKharkovParser:
             if header_row:
                 for th in header_row.find_all(['th', 'td']):
                     text = th.get_text(strip=True)
-                    if text and len(text) <= 3:  # Element symbols are short
+                    if text and len(text) <= 3:
                         headers.append(text.upper())
 
             # Extract values
-            value_rows = table.find_all('tr')[1:]  # Skip header
+            value_rows = table.find_all('tr')[1:]
             if value_rows and headers:
                 for row in value_rows:
                     cells = row.find_all(['td', 'th'])
                     if len(cells) >= len(headers):
+                        element_map = {
+                            'C': 'c', 'SI': 'si', 'MN': 'mn', 'NI': 'ni',
+                            'S': 's', 'P': 'p', 'CR': 'cr', 'CU': 'cu',
+                            'MO': 'mo', 'V': 'v', 'W': 'w', 'CO': 'co',
+                            'NB': 'nb', 'N': 'n'
+                        }
+
                         for i, header in enumerate(headers):
-                            if i < len(cells):
+                            if i < len(cells) and header in element_map:
                                 value = cells[i].get_text(strip=True)
-                                # Clean value
                                 value = value.replace(',', '.')
                                 value = re.sub(r'\s+', ' ', value)
 
                                 if value and value not in ['-', '–', '—', 'не более']:
-                                    # Map common element names
-                                    element = header.lower()
-                                    element_map = {
-                                        'c': 'c', 'si': 'si', 'mn': 'mn', 'ni': 'ni',
-                                        's': 's', 'p': 'p', 'cr': 'cr', 'cu': 'cu',
-                                        'mo': 'mo', 'v': 'v', 'w': 'w', 'co': 'co',
-                                        'nb': 'nb', 'n': 'n'
-                                    }
-
-                                    if element in element_map:
-                                        composition[element_map[element]] = value
+                                    composition[element_map[header]] = value
 
         return composition
 
@@ -285,22 +347,51 @@ class SplavKharkovParser:
     def parse_standard(self, soup: BeautifulSoup) -> Optional[str]:
         """Extract standard (GOST/DIN/etc) from chemistry section with country information"""
 
-        # Priority 1: Look for GOST in chemistry composition section
-        # Find chemistry table first
+        # Priority 1: Look for specific GOST link pattern near "Химический состав"
+        # Pattern: <a href="...gost_start.php?gost_number=5950">ГОСТ 5950</a>
+        for element in soup.find_all(string=re.compile(r'Химический состав', re.IGNORECASE)):
+            parent = element.find_parent()
+            if parent:
+                # Look for GOST link in next few elements
+                for sibling in list(parent.find_all_next(limit=10)):
+                    if sibling.name == 'a' and sibling.get('href'):
+                        href = sibling.get('href')
+                        if 'gost_start.php?gost_number=' in href:
+                            # Extract GOST number from link
+                            match = re.search(r'gost_number=(\d+)', href)
+                            if match:
+                                gost_number = match.group(1)
+                                # Get the link text which should contain full GOST designation
+                                link_text = sibling.get_text(strip=True)
+                                if 'ГОСТ' in link_text:
+                                    # Check next sibling for year (e.g., "-   2000")
+                                    next_text = sibling.next_sibling
+                                    if next_text and isinstance(next_text, str):
+                                        year_match = re.search(r'[-–—]\s*(\d{4})', next_text)
+                                        if year_match:
+                                            return f"ГОСТ {gost_number}-{year_match.group(1)}, Россия"
+                                    return f"ГОСТ {gost_number}, Россия"
+
+                # Also check nearby text for GOST pattern
+                for sibling in [parent] + list(parent.find_next_siblings(limit=5)):
+                    text = sibling.get_text()
+                    gost_matches = re.findall(r'ГОСТ\s+\d+[-–—]?\d*', text)
+                    if gost_matches:
+                        return f"{gost_matches[0]}, Россия"
+
+        # Priority 2: Look for GOST in chemistry table area
         chemistry_table = soup.find('table', class_='table_chemical')
         if not chemistry_table:
-            # Try alternative table structure
             for table in soup.find_all('table'):
                 if 'химический состав' in table.get_text().lower():
                     chemistry_table = table
                     break
 
         if chemistry_table:
-            # Look for GOST before the chemistry table (most common location)
+            # Look for GOST before the chemistry table
             prev_elements = []
             current = chemistry_table.find_previous_sibling()
-            # Check up to 3 previous siblings
-            for _ in range(3):
+            for _ in range(5):
                 if current:
                     prev_elements.append(current)
                     current = current.find_previous_sibling()
@@ -309,33 +400,27 @@ class SplavKharkovParser:
 
             # Search in previous elements
             for element in prev_elements:
+                # Check for GOST link
+                gost_link = element.find('a', href=re.compile(r'gost_start\.php\?gost_number='))
+                if gost_link:
+                    href = gost_link.get('href')
+                    match = re.search(r'gost_number=(\d+)', href)
+                    if match:
+                        gost_number = match.group(1)
+                        next_text = gost_link.next_sibling
+                        if next_text and isinstance(next_text, str):
+                            year_match = re.search(r'[-–—]\s*(\d{4})', next_text)
+                            if year_match:
+                                return f"ГОСТ {gost_number}-{year_match.group(1)}, Россия"
+                        return f"ГОСТ {gost_number}, Россия"
+
+                # Check for GOST in text
                 text = element.get_text()
-                # Look for GOST with number (e.g., ГОСТ 5950, ГОСТ 5950-2000)
-                gost_matches = re.findall(r'ГОСТ\s+\d+[-–—]?\d*', text)
-                if gost_matches:
-                    # Return first match from chemistry section
-                    return f"{gost_matches[0]}, Россия"
-
-            # Also check in table caption or first row
-            caption = chemistry_table.find('caption')
-            if caption:
-                text = caption.get_text()
                 gost_matches = re.findall(r'ГОСТ\s+\d+[-–—]?\d*', text)
                 if gost_matches:
                     return f"{gost_matches[0]}, Россия"
 
-        # Priority 2: Look for "Химический состав" heading and check nearby text
-        for element in soup.find_all(string=re.compile(r'Химический состав', re.IGNORECASE)):
-            parent = element.find_parent()
-            if parent:
-                # Check in the same element and next few siblings
-                for sibling in [parent] + list(parent.find_next_siblings(limit=3)):
-                    text = sibling.get_text()
-                    gost_matches = re.findall(r'ГОСТ\s+\d+[-–—]?\d*', text)
-                    if gost_matches:
-                        return f"{gost_matches[0]}, Россия"
-
-        # Priority 3: Check for other standards in chemistry section
+        # Priority 3: Check for other standards
         if chemistry_table:
             nearby_text = []
             current = chemistry_table.find_previous_sibling()
@@ -513,7 +598,7 @@ class SplavKharkovParser:
                         self.stats['errors'] += 1
 
                     # Rate limiting
-                    time.sleep(1)
+                    time.sleep(2)
 
                 # Pause between classes
                 time.sleep(2)

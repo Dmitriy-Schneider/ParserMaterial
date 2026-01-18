@@ -110,7 +110,7 @@ for i, (grade, link, current_standard) in enumerate(splav_grades, 1):
         errors += 1
 
     # Rate limiting
-    time.sleep(1)
+    time.sleep(2)
 
     # Progress report every 100 grades
     if i % 100 == 0:
