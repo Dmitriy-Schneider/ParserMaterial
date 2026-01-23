@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 SPLAV_BASE = "http://www.splav-kharkov.com"
 
 COMPOSITION_MARKER = "\u0425\u0438\u043c\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u0441\u043e\u0441\u0442\u0430\u0432"
+COMPOSITION_TABLE_MARKER = "\u0425\u0438\u043c\u0438\u0447\u0435\u0441\u043a\u0438\u0439 \u0441\u043e\u0441\u0442\u0430\u0432 \u0432 % \u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430"
 ANALOGS_MARKER = "\u0417\u0430\u0440\u0443\u0431\u0435\u0436\u043d\u044b\u0435 \u0430\u043d\u0430\u043b\u043e\u0433\u0438"
 ANALOGS_SECTION_RE = re.compile(r"\u0417\u0430\u0440\u0443\u0431\u0435\u0436\u043d\u044b\u0435\s+\u0430\u043d\u0430\u043b\u043e\u0433\u0438\s+\u043c\u0430\u0442\u0435\u0440\u0438\u0430\u043b\u0430", re.I)
 ANALOGS_END_MARKER = "\u041e\u0431\u043e\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u044f"
@@ -34,6 +35,22 @@ ELEMENT_MAP = {
     "CU": "cu",
     "NB": "nb",
     "N": "n",
+}
+
+EXTRA_ELEMENTS = {
+    "FE",
+    "AL",
+    "TI",
+    "MG",
+    "ZN",
+    "AS",
+    "B",
+    "ZR",
+    "SN",
+    "PB",
+    "CA",
+    "CD",
+    "SB",
 }
 
 SKIP_ANALOG_TOKENS = {
@@ -62,12 +79,13 @@ def contains_cyrillic(text):
 def clean_text(value):
     if value is None:
         return ""
-    text = value.replace("\xa0", " ").replace("*", "").strip()
+    text = unescape(str(value))
+    text = text.replace("\xa0", " ").replace("*", "").strip()
     return " ".join(text.split())
 
 
 def strip_tags(value):
-    return re.sub(r"<[^>]+>", " ", value)
+    return re.sub(r"</?[A-Za-z][^>]*>", " ", value)
 
 
 def normalize_element(value):
@@ -80,12 +98,50 @@ def normalize_value(value):
     if not value:
         return None
     value = value.replace(",", ".")
-    value = value.replace("≤", "").replace(">=", "").replace("<=", "")
-    value = re.sub(r"(?i)\\b(\\u0434\\u043e|\\u043d\\u0435\\u0431\\u043e\\u043b\\u0435\\u0435|\\u043d\\u0435\\u043c\\u0435\\u043d\\u0435\\u0435)\\b", "", value)
+    value = value.replace("≤", "<=").replace("≥", ">=")
+    value = re.sub(r"(?i)\b(до|не более|не менее|макс|min|max|мин)\b", "", value)
     value = value.replace("~", "")
-    value = re.sub(r"\\s+", "", value)
+    value = re.sub(r"\s+", " ", value).strip()
     value = value.strip(";-")
     return value or None
+
+
+def normalize_range_value(value):
+    text = clean_text(strip_tags(value))
+    if not text:
+        return None
+    text = text.replace(",", ".").replace("≤", "<=").replace("≥", ">=")
+    text_lower = text.lower()
+    nums = re.findall(r"\d+(?:\.\d+)?", text)
+    has_max = any(token in text_lower for token in ["до", "не более", "макс", "max", "<=", "<"])
+    has_min = any(token in text_lower for token in ["не менее", "мин", "min", ">=", ">"])
+
+    if has_max and has_min and len(nums) >= 2:
+        return f"{nums[0]}-{nums[1]}"
+    if has_max and nums:
+        return f"0-{nums[0]}"
+    if re.search(r"\d\s*[-–—]\s*\d", text):
+        return re.sub(r"\s*[-–—]\s*", "-", text)
+    if nums:
+        return nums[0]
+    return None
+
+
+def normalize_other_value(value):
+    text = clean_text(strip_tags(value))
+    if not text:
+        return None
+    text = text.replace(",", ".").replace("≤", "<=").replace("≥", ">=")
+    text = re.sub(r"(?i)\bостальное\s*Fe\b", "", text)
+    text = re.sub(r"(?i)\bостальное\b", "", text)
+    text = clean_text(text)
+    if not text:
+        return None
+    if re.fullmatch(r"[0-9.\s<>=-]+", text) or re.search(r"(?:до|макс|min|max|мин|<=|>=|<|>)", text, re.IGNORECASE):
+        normalized = normalize_range_value(text)
+        if normalized:
+            return normalized
+    return text
 
 
 class SplavTypeParser(HTMLParser):
@@ -123,6 +179,36 @@ class SplavTypeParser(HTMLParser):
             self.current_text.append(data)
 
 
+def decode_html(raw):
+    if raw is None:
+        return None
+    declared = None
+    match = re.search(br"charset\s*=\s*[\"']?([A-Za-z0-9_-]+)", raw, re.I)
+    if match:
+        declared = match.group(1).decode("ascii", errors="ignore").lower()
+    if declared:
+        try:
+            return raw.decode(declared, errors="replace")
+        except Exception:
+            pass
+    candidates = []
+    for enc in ("utf-8", "cp1251", "windows-1251", "iso-8859-1"):
+        try:
+            text = raw.decode(enc, errors="replace")
+        except Exception:
+            continue
+        score = sum(1 for ch in text if 0x0400 <= ord(ch) <= 0x04FF)
+        if COMPOSITION_TABLE_MARKER in text:
+            score += 20000
+        if COMPOSITION_MARKER in text:
+            score += 10000
+        candidates.append((score, text))
+    if not candidates:
+        return raw.decode("utf-8", errors="replace")
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
 def fetch(url, cache_path, encoding, refresh=False, delay=0.0):
     if cache_path.exists() and not refresh:
         raw = cache_path.read_bytes()
@@ -143,7 +229,7 @@ def fetch(url, cache_path, encoding, refresh=False, delay=0.0):
         cache_path.write_bytes(raw)
         if delay:
             time.sleep(delay)
-    return raw.decode(encoding, errors="replace")
+    return decode_html(raw)
 
 
 def parse_type_page(html):
@@ -176,30 +262,155 @@ def extract_table_after(html, start_index):
     return html[open_match.start():pos]
 
 
+def parse_table_rows(rows):
+    if len(rows) < 2:
+        return {}, ""
+    header_cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", rows[0], re.I | re.S)
+    elements = [clean_text(strip_tags(cell)) for cell in header_cells]
+    if not elements:
+        return {}, ""
+    value_cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", rows[1], re.I | re.S)
+    if not value_cells:
+        return {}, ""
+
+    composition = {}
+    other_parts = []
+
+    def extract_element_tokens(text):
+        if not text:
+            return []
+        cleaned = re.sub(r"[^A-Za-z]", " ", text)
+        tokens = [token for token in cleaned.upper().split() if token]
+        return [token for token in tokens if 1 <= len(token) <= 3]
+
+    for header_raw, value in zip(elements, value_cells):
+        header = clean_text(header_raw)
+        header_label = header
+        header_norm = normalize_element(header) if header else ""
+        header_upper = header.upper()
+        element_tokens = []
+        if header_norm not in ELEMENT_MAP and header_norm not in EXTRA_ELEMENTS and header_upper not in {"ПРИМЕСЕЙ", "ПРИМЕСИ", "ПРИМЕСЬ", "-", "-", "-"}:
+            element_tokens = extract_element_tokens(header)
+            if element_tokens:
+                if len(element_tokens) == 1:
+                    header_norm = element_tokens[0]
+                    header_label = element_tokens[0]
+                else:
+                    header_norm = ""
+            else:
+                header_norm = ""
+        value_text = clean_text(strip_tags(value))
+        if not value_text or value_text in {"-", "-", "-"}:
+            continue
+        if not header_norm and header_upper not in {"ПРИМЕСЕЙ", "ПРИМЕСИ", "ПРИМЕСЬ", "-", "-", "-"} and not element_tokens:
+            continue
+        label_from_value = None
+        if header_upper in {"-", "-", "-"}:
+            match = re.match(r"\s*([A-Za-z][A-Za-z+]*)(?:\s*[<>=]?\s*[\d.,].*)?$", value_text)
+            if match:
+                label_from_value = match.group(1)
+
+        column = ELEMENT_MAP.get(header_norm)
+        if column:
+            normalized = normalize_range_value(value_text)
+            if normalized:
+                composition[column] = normalized
+            continue
+
+        other_value = normalize_other_value(value_text)
+        if not other_value:
+            continue
+        if header_upper in {"ПРИМЕСЕЙ", "ПРИМЕСИ", "ПРИМЕСЬ"}:
+            other_parts.append(other_value)
+        elif header_label and header_label not in {"-", "-", "-"}:
+            other_parts.append(f"{header_label} {other_value}")
+        else:
+            if label_from_value and other_value and other_value != label_from_value:
+                other_parts.append(f"{label_from_value} {other_value}")
+            else:
+                other_parts.append(other_value)
+
+    other = "; ".join([p for p in other_parts if p])
+    return composition, other
+
+
+def find_chem_rows(rows):
+    for idx in range(len(rows) - 1):
+        header_cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", rows[idx], re.I | re.S)
+        if not header_cells:
+            continue
+        tokens = []
+        for cell in header_cells:
+            token = normalize_element(strip_tags(cell))
+            if token:
+                tokens.append(token)
+        if not tokens:
+            continue
+        matches = [t for t in tokens if t in ELEMENT_MAP or t in EXTRA_ELEMENTS or t in {"-", "—", "–", "ПРИМЕСЕЙ", "ПРИМЕСИ"}]
+        if len(matches) < 2:
+            continue
+        if not any(t in ELEMENT_MAP or t in EXTRA_ELEMENTS for t in tokens):
+            continue
+        value_cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", rows[idx + 1], re.I | re.S)
+        if not value_cells:
+            continue
+        return rows[idx : idx + 2]
+    return None
+
+
 def parse_composition(html):
+    lower_html = html.lower()
+    idx = lower_html.find(COMPOSITION_TABLE_MARKER.lower())
+    if idx == -1:
+        idx = lower_html.find(COMPOSITION_MARKER.lower())
+    if idx != -1:
+        table_html = extract_table_after(html, idx)
+        if table_html:
+            rows = re.findall(r"<tr[^>]*>.*?</tr>", table_html, re.I | re.S)
+            pair = find_chem_rows(rows)
+            if pair:
+                composition, other = parse_table_rows(pair)
+                if composition or other:
+                    return composition, other
+
+        snippet = html[idx : idx + 8000]
+        rows = re.findall(r"<tr[^>]*>.*?</tr>", snippet, re.I | re.S)
+        pair = find_chem_rows(rows)
+        if pair:
+            composition, other = parse_table_rows(pair)
+            if composition or other:
+                return composition, other
+
     tables = extract_tables(html)
     for table in tables:
         rows = re.findall(r"<tr[^>]*>.*?</tr>", table, re.I | re.S)
-        if len(rows) < 2:
+        pair = find_chem_rows(rows)
+        if not pair:
             continue
-        header_cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", rows[0], re.I | re.S)
-        elements = [normalize_element(strip_tags(cell)) for cell in header_cells]
-        if not any(element in ELEMENT_MAP for element in elements):
-            continue
-        value_cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", rows[1], re.I | re.S)
-        if not value_cells:
-            continue
-        composition = {}
-        for element, value in zip(elements, value_cells):
-            column = ELEMENT_MAP.get(element)
-            if not column:
-                continue
-            normalized = normalize_value(value)
-            if normalized:
-                composition[column] = normalized
-        if composition:
-            return composition
-    return {}
+        composition, other = parse_table_rows(pair)
+        if composition or other:
+            return composition, other
+    return {}, ""
+
+
+def parse_standard(html):
+    lower_html = html.lower()
+    idx = lower_html.find(COMPOSITION_TABLE_MARKER.lower())
+    if idx == -1:
+        idx = lower_html.find(COMPOSITION_MARKER.lower())
+    snippet = html[idx : idx + 3000] if idx != -1 else html
+    snippet_text = clean_text(strip_tags(snippet))
+    match = re.search(r"ГОСТ\s*(\d+)\s*(?:[-–—]\s*(\d{2,4}))?", snippet_text)
+    if not match:
+        full_text = clean_text(strip_tags(html))
+        match = re.search(r"ГОСТ\s*(\d+)\s*(?:[-–—]\s*(\d{2,4}))?", full_text)
+    if match:
+        number = match.group(1)
+        year = match.group(2)
+        if year:
+            return f"ГОСТ {number}-{year}, Россия"
+        return f"ГОСТ {number}, Россия"
+    return "ГОСТ, Россия"
 
 
 def parse_analogs(html):
@@ -216,7 +427,7 @@ def parse_analogs(html):
         text = clean_text(strip_tags(cell))
         if not text:
             continue
-        parts = re.split(r"[\\s,;]+", text)
+        parts = re.split(r"[\s,;]+", text)
         for part in parts:
             token = part.strip()
             if token:
@@ -288,14 +499,32 @@ def collect_splav_grades(report_dir, refresh=False, delay=0.0, verbose=False):
     return grades
 
 
-def build_records(grades, report_dir, refresh=False, delay=0.0, limit=None):
-    records = []
+def build_records(
+    grades,
+    report_dir,
+    refresh=False,
+    delay=0.0,
+    limit=None,
+    existing_records=None,
+    checkpoint_every=0,
+    output_path=None,
+    header=None,
+):
+    records = list(existing_records) if existing_records else []
+    seen = set()
+    for row in records:
+        grade = clean_text(row.get("grade")) if isinstance(row, dict) else ""
+        if grade:
+            seen.add(grade)
     items = list(grades.items())
     if limit:
         items = items[:limit]
     total = len(items)
+    new_count = 0
 
     for index, (grade, url) in enumerate(items, 1):
+        if grade in seen:
+            continue
         name_id_match = re.search(r"name_id=(\d+)", url)
         cache_name = f"mat_{name_id_match.group(1)}.html" if name_id_match else f"mat_{index}.html"
         html = fetch(
@@ -307,18 +536,27 @@ def build_records(grades, report_dir, refresh=False, delay=0.0, limit=None):
         )
         if not html:
             continue
-        composition = parse_composition(html)
+        composition, other = parse_composition(html)
         analogs = parse_analogs(html)
+        standard = parse_standard(html)
         record = {
             "grade": grade,
             "analogues": " ".join(analogs) if analogs else None,
             "base": "Fe",
-            "standard": f"GOST {grade}, \u0420\u043e\u0441\u0441\u0438\u044f",
+            "standard": standard,
             "manufacturer": None,
+            "other": other or None,
+            "tech": None,
             "link": url,
         }
         record.update(composition)
         records.append(record)
+        seen.add(grade)
+        new_count += 1
+
+        if checkpoint_every and output_path and header and new_count % checkpoint_every == 0:
+            write_csv(output_path, records, header)
+            print(f"[INFO] Checkpoint written: {output_path} ({len(records)} rows)")
 
         if index % 100 == 0:
             print(f"[INFO] Parsed {index}/{total}")
@@ -509,6 +747,7 @@ def compare_and_apply(csv_rows, db_path, report_dir, apply_changes=False):
             "cu",
             "nb",
             "n",
+            "other",
             "tech",
             "standard",
             "manufacturer",
@@ -533,6 +772,8 @@ def main():
     parser.add_argument("--no-compare", action="store_true", help="Skip DB comparison")
     parser.add_argument("--delay", type=float, default=0.0, help="Delay between requests (seconds)")
     parser.add_argument("--limit", type=int, help="Limit number of grades for testing")
+    parser.add_argument("--resume", action="store_true", help="Resume from existing CSV output if present")
+    parser.add_argument("--checkpoint", type=int, default=0, help="Write CSV every N new records")
     parser.add_argument("--verbose", action="store_true", help="Verbose debug output")
     args = parser.parse_args()
 
@@ -542,7 +783,6 @@ def main():
     grades = collect_splav_grades(report_dir, refresh=args.refresh, delay=args.delay, verbose=args.verbose)
     print(f"[INFO] Grades discovered: {len(grades)}")
 
-    records = build_records(grades, report_dir, refresh=args.refresh, delay=args.delay, limit=args.limit)
     header = [
         "grade",
         "analogues",
@@ -561,12 +801,29 @@ def main():
         "cu",
         "nb",
         "n",
+        "other",
         "tech",
         "standard",
         "manufacturer",
         "link",
     ]
     output_csv = report_dir / "splav_ru_grades.csv"
+    existing_records = None
+    if args.resume and output_csv.exists():
+        existing_records = load_csv(output_csv)
+        print(f"[INFO] Resume enabled: loaded {len(existing_records)} existing records")
+
+    records = build_records(
+        grades,
+        report_dir,
+        refresh=args.refresh,
+        delay=args.delay,
+        limit=args.limit,
+        existing_records=existing_records,
+        checkpoint_every=args.checkpoint or 0,
+        output_path=output_csv if args.checkpoint else None,
+        header=header,
+    )
     write_csv(output_csv, records, header)
     print(f"[INFO] CSV written: {output_csv} ({len(records)} rows)")
 

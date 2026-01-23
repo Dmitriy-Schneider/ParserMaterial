@@ -258,7 +258,10 @@ def extract_maker_from_title(title, grade_candidates):
             return None
         if is_standard_prefix(maker):
             return None
-        if "knife" in maker.lower() or "steel" in maker.lower():
+        maker_lower = maker.lower().strip()
+        if maker_lower in ("knife", "steel", "knife steel"):
+            return None
+        if maker_lower.endswith("knife steel") and len(maker_lower.split()) <= 3:
             return None
         return maker
     return None
@@ -440,6 +443,7 @@ def main():
     parser.add_argument("--retries", type=int, default=3, help="Fetch retries")
     parser.add_argument("--delay", type=float, default=0.5, help="Delay between retries")
     parser.add_argument("--limit", type=int, default=0, help="Limit pages for debug")
+    parser.add_argument("--missing-only", action="store_true", help="Fetch only pages missing from existing page info")
     parser.add_argument("--apply", action="store_true", help="Apply updates to DB")
     args = parser.parse_args()
 
@@ -456,6 +460,18 @@ def main():
     links = sorted(link_grades.keys())
     if args.limit:
         links = links[: args.limit]
+
+    existing_info = {}
+    if args.missing_only:
+        page_info_path = report_dir / "zknives_page_info.csv"
+        if page_info_path.exists():
+            with page_info_path.open("r", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    link = row.get("link")
+                    if link:
+                        existing_info[link] = row
+        if existing_info:
+            links = [link for link in links if link not in existing_info]
 
     results = []
     errors = []
@@ -488,6 +504,9 @@ def main():
                 print(f"Processed {completed}/{total}")
 
     page_info = {row["link"]: row for row in results}
+    if existing_info:
+        page_info = {**existing_info, **page_info}
+        results = list(page_info.values())
 
     write_dict_csv(
         report_dir / "zknives_page_info.csv",
