@@ -1,0 +1,1 @@
+zkEvent.addLoadEvent(initLists);function initLists(){mcl($('lst1'), false); mcl($('lst2'), false);mcl($('lst3'),true)}

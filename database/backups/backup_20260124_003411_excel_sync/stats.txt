@@ -1,0 +1,5 @@
+Total grades: 9930
+With analogues: 6488
+Size: 8.72 MB
+Timestamp: 20260124_003411
+Reason: excel_sync

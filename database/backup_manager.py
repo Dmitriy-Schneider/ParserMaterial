@@ -33,7 +33,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Configuration
 BACKUP_DIR = Path(__file__).parent / 'backups'
 DB_PATH = Path(__file__).parent / 'steel_database.db'
-MAX_BACKUPS = 10  # Keep last 10 backups
+MAX_BACKUPS = 3  # Keep last 3 backups (reduced from 10 for space efficiency)
 ALWAYS_BACKUP = True  # Set to False to disable automatic backups
 
 class BackupManager:

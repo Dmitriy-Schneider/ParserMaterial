@@ -7,6 +7,7 @@ import config
 from database_schema import get_connection
 from ai_search import get_ai_search
 from fuzzy_search import get_composition_matcher
+from database.backup_manager import backup_before_modification
 
 # Load environment variables
 load_dotenv()
@@ -327,6 +328,9 @@ def compare_grades_endpoint():
 @app.route('/api/steels/add', methods=['POST'])
 def add_steel():
     """Add AI search result to main database"""
+    # Create backup before adding new grade
+    backup_before_modification(reason="api_add_steel")
+
     data = request.get_json() or {}
 
     if not data.get('grade'):
@@ -389,6 +393,9 @@ def add_steel():
 @app.route('/api/steels/delete', methods=['POST'])
 def delete_steel():
     """Delete steel grade from database"""
+    # Create backup before deleting grade
+    backup_before_modification(reason="api_delete_steel")
+
     data = request.get_json() or {}
 
     if not data.get('grade'):

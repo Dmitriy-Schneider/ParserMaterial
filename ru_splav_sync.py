@@ -8,6 +8,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+from database.backup_manager import backup_before_modification
 
 
 SPLAV_BASE = "http://www.splav-kharkov.com"

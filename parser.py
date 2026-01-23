@@ -4,6 +4,7 @@ import time
 import re
 from database_schema import get_connection, create_database
 import config
+from database.backup_manager import backup_before_modification
 
 
 class SteelParser:
@@ -168,6 +169,11 @@ class SteelParser:
     def run(self):
         """Run the parser"""
         print("Starting parser...")
+
+        # Create backup before parsing
+        print("Creating database backup...")
+        backup_before_modification(reason="zknives_parser")
+
         try:
             self.parse_main_table()
             print("Parsing complete!")
