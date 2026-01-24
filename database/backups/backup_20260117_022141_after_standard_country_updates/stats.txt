@@ -1,5 +1,0 @@
-Total grades: 7632
-With analogues: 6477
-Size: 7.57 MB
-Timestamp: 20260117_022141
-Reason: after_standard_country_updates

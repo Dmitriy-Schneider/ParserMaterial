@@ -1,5 +1,0 @@
-Total grades: 6940
-With analogues: 178
-Size: 7.27 MB
-Timestamp: 20260117_020724
-Reason: before_rebuild
