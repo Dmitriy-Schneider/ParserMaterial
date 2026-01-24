@@ -1,5 +1,0 @@
-Total grades: 10702
-With analogues: 7872
-Size: 9.83 MB
-Timestamp: 20260124_150152
-Reason: remove_duplicates
