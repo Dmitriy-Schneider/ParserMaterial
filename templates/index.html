@@ -1174,11 +1174,11 @@
                     gradeCell += '<span class="ai-badge">AI</span>';
                 }
 
-                // Replace asterisks with spaces and create clickable links for each analogue
-                let analoguesArray = (steel.analogues || '').replace(/\*/g, ' ').trim().split(/\s+/).filter(a => a);
+                // Split analogues by pipe (|) and create clickable links
+                let analoguesArray = (steel.analogues || '').split('|').map(a => a.trim()).filter(a => a);
                 let analoguesCell = analoguesArray.map(analogue =>
                     `<a href="#" class="grade-link" onclick="searchAnalogue('${analogue.replace(/'/g, "\\'")}'); return false;">${analogue}</a>`
-                ).join(' ');
+                ).join(', ');
 
                 // Standard column
                 let standardCell = steel.standard || '';
