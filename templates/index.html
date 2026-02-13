@@ -991,7 +991,7 @@
                         <th style="width: 40px;">Cu</th>
                         <th style="width: 40px;">Nb</th>
                         <th style="width: 40px;">N</th>
-                        <th style="width: 80px;">Other</th>
+                        <th style="width: 200px;">Other</th>
                         <th style="width: 120px;">Standard</th>
                         <th style="width: 70px;">Actions</th>
                     </tr>
@@ -1207,7 +1207,7 @@
                     <td>${steel.cu || ''}</td>
                     <td>${steel.nb || ''}</td>
                     <td>${steel.n || ''}</td>
-                    <td style="max-width: 80px; overflow: hidden; text-overflow: ellipsis;">${steel.other || ''}</td>
+                    <td style="min-width: 150px; max-width: 300px; white-space: normal; word-wrap: break-word; font-size: 10px;">${steel.other || ''}</td>
                     <td>${standardCell}</td>
                     <td>${actionsCell}</td>
                 </tr>
@@ -1314,8 +1314,9 @@
         }
 
         // AI search function (database + Perplexity AI if not found)
+        // ИСПРАВЛЕНО: Сохраняет режим точного поиска (exact match) при использовании AI
         function searchWithAI() {
-            searchSteels(false, true);
+            searchSteels(true, true);  // exact=true, useAI=true
         }
 
         // Clear all filters
@@ -1531,6 +1532,7 @@
                                     <th style="width: 50px;">N</th>
                                     <th style="width: 50px;">S</th>
                                     <th style="width: 50px;">P</th>
+                                    <th style="width: 150px;">Other</th>
                                     <th style="width: 120px;">Standard</th>
                                     <th>Analogues</th>
                                 </tr>
@@ -1554,9 +1556,10 @@
                                     <td><strong>${currentRefSteel.n || '-'}</strong></td>
                                     <td><strong>${currentRefSteel.s || '-'}</strong></td>
                                     <td><strong>${currentRefSteel.p || '-'}</strong></td>
+                                    <td style="font-size: 10px; white-space: normal; word-wrap: break-word;"><strong>${currentRefSteel.other || '-'}</strong></td>
                                     <td><strong>${currentRefSteel.standard || '-'}</strong></td>
                                     <td style="font-size: 10px; white-space: normal; word-wrap: break-word;">${
-                                        (currentRefSteel.analogues || '').replace(/\*/g, ' ').trim().split(/\s+/).filter(a => a).map(analogue =>
+                                        (currentRefSteel.analogues || '').split('|').map(a => a.trim()).filter(a => a).map(analogue =>
                                             `<a href="#" class="grade-link" onclick="searchAnalogue('${analogue.replace(/'/g, "\\'")}'); return false;">${analogue}</a>`
                                         ).join(' ')
                                     }</td>
@@ -1570,28 +1573,35 @@
                             gradeCell = `<a href="${result.link}" target="_blank" class="grade-link">${result.grade}</a>`;
                         }
 
-                        // Replace asterisks with spaces and create clickable links for each analogue
-                        let analoguesArray = (result.analogues || '').replace(/\*/g, ' ').trim().split(/\s+/).filter(a => a);
+                        // Split analogues by pipe separator
+                        let analoguesArray = (result.analogues || '').split('|').map(a => a.trim()).filter(a => a);
                         let analoguesCell = analoguesArray.map(analogue =>
                             `<a href="#" class="grade-link" onclick="searchAnalogue('${analogue.replace(/'/g, "\\'")}'); return false;">${analogue}</a>`
                         ).join(' ');
 
                         // Compare elements and highlight differences
-                        // All elements from fuzzy_search.py ELEMENTS list
-                        const elements = ['c', 'cr', 'ni', 'mo', 'v', 'w', 'co', 'mn', 'si', 'cu', 'nb', 'n', 's', 'p'];
+                        // S and P excluded from calculation but shown in table
+                        const elementsForCalc = ['c', 'cr', 'ni', 'mo', 'v', 'w', 'co', 'mn', 'si', 'cu', 'nb', 'n'];
+                        const elementsForDisplay = ['c', 'cr', 'ni', 'mo', 'v', 'w', 'co', 'mn', 'si', 'cu', 'nb', 'n', 's', 'p'];
                         let elementCells = {};
 
-                        elements.forEach(elem => {
+                        elementsForDisplay.forEach(elem => {
                             const refVal = parseElementValue(currentRefSteel[elem]);
                             const candVal = parseElementValue(result[elem]);
-                            const diff = calculateDifference(refVal, candVal);
                             const displayValue = result[elem] || '-';
 
-                            if (refVal !== null || candVal !== null) {
-                                const diffClass = getDiffClass(diff);
-                                const tooltip = diff > 0 ? `Diff: ${diff.toFixed(1)}%` : 'Same';
-                                elementCells[elem] = `<td class="${diffClass}"><div class="diff-tooltip">${tooltip}</div>${displayValue}</td>`;
+                            // Calculate diff only for elements used in calculation
+                            if (elementsForCalc.includes(elem)) {
+                                const diff = calculateDifference(refVal, candVal);
+                                if (refVal !== null || candVal !== null) {
+                                    const diffClass = getDiffClass(diff);
+                                    const tooltip = diff > 0 ? `Diff: ${diff.toFixed(1)}%` : 'Same';
+                                    elementCells[elem] = `<td class="${diffClass}"><div class="diff-tooltip">${tooltip}</div>${displayValue}</td>`;
+                                } else {
+                                    elementCells[elem] = `<td>${displayValue}</td>`;
+                                }
                             } else {
+                                // S and P: just display, no highlighting
                                 elementCells[elem] = `<td>${displayValue}</td>`;
                             }
                         });
@@ -1614,6 +1624,7 @@
                                 ${elementCells['n']}
                                 ${elementCells['s']}
                                 ${elementCells['p']}
+                                <td style="max-width: 300px; white-space: normal; word-wrap: break-word; font-size: 10px;">${result.other || '-'}</td>
                                 <td>${result.standard || '-'}</td>
                                 <td style="max-width: 300px; white-space: normal; word-wrap: break-word; font-size: 10px;">${analoguesCell}</td>
                             </tr>
@@ -1831,14 +1842,37 @@
             const resultsDiv = document.getElementById('compareResults');
             resultsDiv.innerHTML = '<p style="text-align: center;">Loading comparison...</p>';
 
+            // ИСПРАВЛЕНО: Отправляем полные данные марок (для AI результатов)
+            // Проверяем если reference марка из AI (имеет id === 'AI')
+            const requestBody = {
+                reference_grade: refGrade,
+                compare_grades: compareGrades
+            };
+
+            // Если reference марка из AI - добавляем полные данные
+            if (currentCompareRefSteel.id === 'AI') {
+                requestBody.reference_data = currentCompareRefSteel;
+            }
+
+            // Добавляем полные данные для compare марок если они из AI
+            const compareData = [];
+            compareGrades.forEach(gradeName => {
+                // Ищем марку в allSteels (может быть AI результат)
+                const steel = allSteels.find(s => s.grade === gradeName);
+                if (steel && steel.id === 'AI') {
+                    compareData.push(steel);
+                }
+            });
+
+            if (compareData.length > 0) {
+                requestBody.compare_data = compareData;
+            }
+
             // Send to backend
             fetch('/api/steels/compare', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    reference_grade: refGrade,
-                    compare_grades: compareGrades
-                })
+                body: JSON.stringify(requestBody)
             })
             .then(response => response.json())
             .then(data => {
@@ -1876,6 +1910,7 @@
                             <th style="width: 50px;">N</th>
                             <th style="width: 50px;">S</th>
                             <th style="width: 50px;">P</th>
+                            <th style="width: 150px;">Other</th>
                             <th style="width: 120px;">Standard</th>
                             <th>Analogues</th>
                         </tr>
@@ -1898,9 +1933,10 @@
                             <td><strong>${data.reference_data.n || '-'}</strong></td>
                             <td><strong>${data.reference_data.s || '-'}</strong></td>
                             <td><strong>${data.reference_data.p || '-'}</strong></td>
+                            <td style="font-size: 10px; white-space: normal; word-wrap: break-word;"><strong>${data.reference_data.other || '-'}</strong></td>
                             <td><strong>${data.reference_data.standard || '-'}</strong></td>
                             <td style="font-size: 10px; white-space: normal; word-wrap: break-word;">${
-                                (data.reference_data.analogues || '').replace(/\*/g, ' ').trim().split(/\s+/).filter(a => a).map(analogue =>
+                                (data.reference_data.analogues || '').split('|').map(a => a.trim()).filter(a => a).map(analogue =>
                                     `<a href="#" class="grade-link" onclick="searchAnalogue('${analogue.replace(/'/g, "\\'")}'); return false;">${analogue}</a>`
                                 ).join(' ')
                             }</td>
@@ -1908,7 +1944,9 @@
             `;
 
             // Add compared grades
-            const elements = ['c', 'cr', 'ni', 'mo', 'v', 'w', 'co', 'mn', 'si', 'cu', 'nb', 'n', 's', 'p'];
+            // S and P excluded from calculation but shown in table
+            const elementsForCalc = ['c', 'cr', 'ni', 'mo', 'v', 'w', 'co', 'mn', 'si', 'cu', 'nb', 'n'];
+            const elementsForDisplay = ['c', 'cr', 'ni', 'mo', 'v', 'w', 'co', 'mn', 'si', 'cu', 'nb', 'n', 's', 'p'];
 
             data.results.forEach(result => {
                 let gradeCell = result.grade;
@@ -1916,7 +1954,7 @@
                     gradeCell = `<a href="${result.link}" target="_blank" class="grade-link">${result.grade}</a>`;
                 }
 
-                let analoguesArray = (result.analogues || '').replace(/\*/g, ' ').trim().split(/\s+/).filter(a => a);
+                let analoguesArray = (result.analogues || '').split('|').map(a => a.trim()).filter(a => a);
                 let analoguesCell = analoguesArray.map(analogue =>
                     `<a href="#" class="grade-link" onclick="searchAnalogue('${analogue.replace(/'/g, "\\'")}'); return false;">${analogue}</a>`
                 ).join(' ');
@@ -1924,17 +1962,23 @@
                 // Compare elements and highlight differences
                 let elementCells = {};
 
-                elements.forEach(elem => {
+                elementsForDisplay.forEach(elem => {
                     const refVal = parseElementValue(data.reference_data[elem]);
                     const candVal = parseElementValue(result[elem]);
-                    const diff = calculateDifference(refVal, candVal);
                     const displayValue = result[elem] || '-';
 
-                    if (refVal !== null || candVal !== null) {
-                        const diffClass = getDiffClass(diff);
-                        const tooltip = diff > 0 ? `Diff: ${diff.toFixed(1)}%` : 'Same';
-                        elementCells[elem] = `<td class="${diffClass}"><div class="diff-tooltip">${tooltip}</div>${displayValue}</td>`;
+                    // Calculate diff only for elements used in calculation
+                    if (elementsForCalc.includes(elem)) {
+                        const diff = calculateDifference(refVal, candVal);
+                        if (refVal !== null || candVal !== null) {
+                            const diffClass = getDiffClass(diff);
+                            const tooltip = diff > 0 ? `Diff: ${diff.toFixed(1)}%` : 'Same';
+                            elementCells[elem] = `<td class="${diffClass}"><div class="diff-tooltip">${tooltip}</div>${displayValue}</td>`;
+                        } else {
+                            elementCells[elem] = `<td>${displayValue}</td>`;
+                        }
                     } else {
+                        // S and P: just display, no highlighting
                         elementCells[elem] = `<td>${displayValue}</td>`;
                     }
                 });
@@ -1956,6 +2000,7 @@
                         ${elementCells['n']}
                         ${elementCells['s']}
                         ${elementCells['p']}
+                        <td style="max-width: 300px; white-space: normal; word-wrap: break-word; font-size: 10px;">${result.other || '-'}</td>
                         <td>${result.standard || '-'}</td>
                         <td style="max-width: 300px; white-space: normal; word-wrap: break-word; font-size: 10px;">${analoguesCell}</td>
                     </tr>

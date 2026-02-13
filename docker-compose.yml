@@ -11,6 +11,11 @@ services:
       - ./database:/app/database
       # Монтируем папку для логов (если нужно)
       - ./logs:/app/logs
+      # Монтируем код приложения для live reload
+      - ./app.py:/app/app.py
+      - ./templates:/app/templates
+      - ./ai_search.py:/app/ai_search.py
+      - ./fuzzy_search.py:/app/fuzzy_search.py
     env_file:
       - .env
     environment:
@@ -27,6 +32,12 @@ services:
       context: ./telegram_bot
       dockerfile: Dockerfile
     container_name: parsersteel-telegram-bot
+    volumes:
+      # Монтируем код бота для live reload
+      - ./telegram_bot/bot.py:/app/bot.py
+      - ./telegram_bot/config.py:/app/config.py
+      - ./telegram_bot/context_analyzer.py:/app/context_analyzer.py
+      - ./telegram_bot/handlers:/app/handlers
     env_file:
       - .env
     environment:

@@ -25,7 +25,7 @@ async def compare_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def perform_compare(update: Update, grades: list):
-    """Perform comparison of steel grades"""
+    """Perform comparison of steel grades (with AI support)"""
     try:
         if len(grades) < 2:
             await update.message.reply_text(
@@ -37,98 +37,120 @@ async def perform_compare(update: Update, grades: list):
         # Send "processing" message
         status_msg = await update.message.reply_text(
             f"⚖️ Сравниваю марки: `{', '.join(grades)}`...\n\n"
-            f"▪️ Проверка в базе данных\n",
+            f"▪️ Поиск марок (БД + AI)...\n",
             parse_mode='Markdown'
         )
 
         reference_grade = grades[0]
         compare_grades = grades[1:]
 
-        # Step 1: Find reference grade in DB
-        ref_response = requests.get(
-            config.SEARCH_ENDPOINT,
-            params={'grade': reference_grade, 'exact': 'true'},
-            timeout=30
-        )
+        # Step 1: Find ALL grades (reference + compare) in DB or AI
+        # ИСПРАВЛЕНО: Теперь ищем все марки через AI если не найдены в БД
+        all_grades_data = {}
+        ai_data_to_send = {}
 
-        ref_found = False
-        ref_data = None
-
-        if ref_response.status_code == 200:
-            ref_results = ref_response.json()
-            if ref_results:
-                ref_found = True
-                ref_data = ref_results[0]
-
-        # Step 2: If reference grade not found in DB, try AI Search
-        if not ref_found:
-            await status_msg.edit_text(
-                f"⚖️ Сравниваю марки: `{', '.join(grades)}`...\n\n"
-                f"▪️ Проверка в базе данных\n"
-                f"▪️ Марка `{reference_grade}` не найдена в БД\n"
-                f"▪️ Поиск через AI Search...\n",
-                parse_mode='Markdown'
-            )
-
-            # Try AI Search for reference grade
-            ai_response = requests.get(
-                config.SEARCH_ENDPOINT,
-                params={'grade': reference_grade, 'ai': 'true'},
-                timeout=60
-            )
-
-            if ai_response.status_code == 200:
-                ai_results = ai_response.json()
-                if ai_results:
-                    ref_found = True
-                    ref_data = ai_results[0]
-
-        if not ref_found:
-            await status_msg.edit_text(
-                f"❌ Марка `{reference_grade}` не найдена ни в базе данных, ни через AI Search.",
-                parse_mode='Markdown'
-            )
-            return
-
-        # Step 3: Find comparison grades in DB (exact match only)
-        await status_msg.edit_text(
-            f"⚖️ Сравниваю марки: `{', '.join(grades)}`...\n\n"
-            f"▪️ Эталонная марка найдена\n"
-            f"▪️ Поиск марок для сравнения...\n",
-            parse_mode='Markdown'
-        )
-
-        found_compare_grades = []
-        not_found_grades = []
-
-        for grade in compare_grades:
+        for i, grade in enumerate(grades, 1):
+            # Try DB first
             response = requests.get(
                 config.SEARCH_ENDPOINT,
                 params={'grade': grade, 'exact': 'true'},
                 timeout=30
             )
 
+            found = False
             if response.status_code == 200:
                 results = response.json()
                 if results:
-                    found_compare_grades.append(results[0])
-                else:
-                    not_found_grades.append(grade)
-            else:
-                not_found_grades.append(grade)
+                    found = True
+                    all_grades_data[grade] = results[0]
+                    print(f"[Compare] Found {grade} in DB")
 
-        if not found_compare_grades:
+            # If not in DB, try AI
+            if not found:
+                await status_msg.edit_text(
+                    f"⚖️ Сравниваю марки ({i}/{len(grades)})...\n\n"
+                    f"▪️ Марка `{grade}` не в БД\n"
+                    f"▪️ Поиск через AI Search...\n"
+                    f"⏳ Пожалуйста, подождите...",
+                    parse_mode='Markdown'
+                )
+
+                ai_response = requests.get(
+                    config.SEARCH_ENDPOINT,
+                    params={'grade': grade, 'ai': 'true'},
+                    timeout=60
+                )
+
+                if ai_response.status_code == 200:
+                    ai_results = ai_response.json()
+                    if ai_results:
+                        found = True
+                        all_grades_data[grade] = ai_results[0]
+                        ai_data_to_send[grade] = ai_results[0]
+                        print(f"[Compare] Found {grade} via AI")
+
+            if not found:
+                await status_msg.edit_text(
+                    f"❌ Марка `{grade}` не найдена ни в БД, ни через AI Search.",
+                    parse_mode='Markdown'
+                )
+                return
+
+        # Step 2: Use /api/steels/compare endpoint with AI data
+        # ИСПРАВЛЕНО: Используем улучшенный endpoint с поддержкой AI данных
+        await status_msg.edit_text(
+            f"⚖️ Сравниваю марки: `{', '.join(grades)}`...\n\n"
+            f"▪️ Все марки найдены\n"
+            f"▪️ Формирую таблицу сравнения...\n",
+            parse_mode='Markdown'
+        )
+
+        compare_request = {
+            'reference_grade': reference_grade,
+            'compare_grades': compare_grades
+        }
+
+        # Add AI data if reference is from AI
+        if reference_grade in ai_data_to_send:
+            compare_request['reference_data'] = ai_data_to_send[reference_grade]
+            print(f"[Compare] Sending AI data for reference: {reference_grade}")
+
+        # Add AI data for compare grades
+        compare_ai_data = []
+        for grade in compare_grades:
+            if grade in ai_data_to_send:
+                compare_ai_data.append(ai_data_to_send[grade])
+                print(f"[Compare] Sending AI data for compare: {grade}")
+
+        if compare_ai_data:
+            compare_request['compare_data'] = compare_ai_data
+
+        # Call compare endpoint
+        compare_response = requests.post(
+            f"{config.SEARCH_ENDPOINT.replace('/steels', '/steels/compare')}",
+            json=compare_request,
+            timeout=30
+        )
+
+        if compare_response.status_code != 200:
+            error_data = compare_response.json() if compare_response.text else {}
+            error_msg = error_data.get('error', f'HTTP {compare_response.status_code}')
             await status_msg.edit_text(
-                f"❌ Ни одна марка для сравнения не найдена в базе данных:\n"
-                f"{', '.join(not_found_grades)}",
+                f"❌ Ошибка сравнения: {error_msg}",
                 parse_mode='Markdown'
             )
             return
 
+        compare_data = compare_response.json()
+
         # Delete status message
         await status_msg.delete()
 
-        # Step 4: Format comparison table
+        # Step 3: Format comparison table
+        ref_data = compare_data['reference_data']
+        found_compare_grades = compare_data['results']
+        not_found_grades = []  # Все марки найдены (иначе вернулись бы раньше)
+
         message = format_comparison_table(ref_data, found_compare_grades, not_found_grades)
 
         # Send in chunks if too long (Telegram limit is 4096 characters)
@@ -169,7 +191,7 @@ def format_comparison_table(ref_data: dict, compare_grades: list, not_found: lis
     all_grades = [ref_data] + compare_grades
     grade_names = [g['grade'] for g in all_grades]
 
-    # Elements to compare (14 elements from fuzzy_search.py)
+    # Elements to compare (12 elements, S and P excluded as often not reported)
     elements = [
         ('C', 'c'),
         ('Cr', 'cr'),
@@ -182,9 +204,7 @@ def format_comparison_table(ref_data: dict, compare_grades: list, not_found: lis
         ('Si', 'si'),
         ('Cu', 'cu'),
         ('Nb', 'nb'),
-        ('N', 'n'),
-        ('S', 's'),
-        ('P', 'p')
+        ('N', 'n')
     ]
 
     # Start code block for table
@@ -242,10 +262,28 @@ def format_comparison_table(ref_data: dict, compare_grades: list, not_found: lis
     for grade in all_grades:
         analogues = grade.get('analogues', '')
         if analogues and analogues not in [None, '', 'N/A']:
+            # Split by pipe separator and format
+            analogue_list = [a.strip() for a in analogues.split('|') if a.strip()]
+            if analogue_list:
+                analogue_str = ', '.join(analogue_list)
+                # Truncate if too long
+                if len(analogue_str) > 100:
+                    analogue_str = analogue_str[:97] + "..."
+                lines.append(f"• **{grade['grade']}**: {analogue_str}")
+            else:
+                lines.append(f"• **{grade['grade']}**: _Нет в БД_")
+        else:
+            lines.append(f"• **{grade['grade']}**: _Нет в БД_")
+
+    # Add other elements info
+    lines.append("\n**ℹ️ Другие элементы:**")
+    for grade in all_grades:
+        other = grade.get('other', '')
+        if other and other not in [None, '', 'N/A', '-']:
             # Truncate if too long
-            if len(analogues) > 100:
-                analogues = analogues[:97] + "..."
-            lines.append(f"• **{grade['grade']}**: {analogues}")
+            if len(other) > 100:
+                other = other[:97] + "..."
+            lines.append(f"• **{grade['grade']}**: {other}")
         else:
             lines.append(f"• **{grade['grade']}**: _Нет в БД_")
 

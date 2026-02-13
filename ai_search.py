@@ -7,6 +7,7 @@ import os
 import json
 import time
 import sys
+import re
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -206,14 +207,28 @@ class AISearch:
             # Create prompt
             prompt = self._create_prompt(grade_name)
 
+            # Detect Cyrillic to add special instructions
+            has_cyrillic = self._is_cyrillic(grade_name)
+
             # Add instruction to search the internet with strict verification
+            cyrillic_note = ""
+            if has_cyrillic:
+                cyrillic_note = (
+                    "🇷🇺 RUSSIAN/CYRILLIC GRADE DETECTED:\n"
+                    "- Search using the EXACT Cyrillic spelling (DO NOT transliterate to Latin)\n"
+                    "- Prioritize Russian sources: GOST standards, splav.ru, Russian steel manufacturers\n"
+                    "- Use Russian language search queries for better results\n"
+                    "- Include Russian databases in Tier 3: splav.kz, metallicheckiy-portal.ru\n\n"
+                )
+
             system_message = (
                 "You are an expert metallurgist and steel database specialist. "
+                f"{cyrillic_note}"
                 "CRITICAL REQUIREMENTS:\n\n"
                 "SOURCE PRIORITY (highest to lowest):\n"
                 "1. TIER 1 (HIGHEST): Official manufacturer PDF datasheets (e.g., Bohler, SSAB, Hardox)\n"
                 "2. TIER 2: International standards documents (AISI, DIN, EN, GOST, JIS, GB)\n"
-                "3. TIER 3: Professional databases (MatWeb.com, steelnumber.com, key-to-steel.com)\n"
+                "3. TIER 3: Professional databases (MatWeb.com, steelnumber.com, key-to-steel.com, splav.ru for Russian grades)\n"
                 "4. TIER 4 (LOWEST): General websites (Wikipedia, forums, blogs) - DO NOT USE for chemical composition\n\n"
                 "VERIFICATION PROTOCOL:\n"
                 "1. Search MULTIPLE sources (minimum 2-3 different sources)\n"
@@ -595,9 +610,38 @@ class AISearch:
 
         return self._clean_citation_references(str(analogues).strip())
 
+    def _is_cyrillic(self, text: str) -> bool:
+        """Check if text contains Cyrillic characters"""
+        return bool(re.search(r'[а-яА-ЯёЁ]', text))
+
     def _create_prompt(self, grade_name: str) -> str:
         """Create prompt for AI with enhanced confidence tracking"""
-        return f"""Find detailed information about steel grade "{grade_name}".
+        # Detect if grade name contains Cyrillic characters
+        has_cyrillic = self._is_cyrillic(grade_name)
+
+        # Add special instructions for Russian/Cyrillic grades
+        cyrillic_instructions = ""
+        if has_cyrillic:
+            cyrillic_instructions = f"""
+🇷🇺 ВАЖНО: Марка "{grade_name}" написана КИРИЛЛИЦЕЙ (русский алфавит).
+
+КРИТИЧЕСКИЕ ТРЕБОВАНИЯ ДЛЯ РОССИЙСКИХ МАРОК:
+1. Искать марку ТОЧНО КАК НАПИСАНО: "{grade_name}" (НЕ транслитерировать в латиницу!)
+2. Искать в российских источниках:
+   - ГОСТ стандарты (GOST standards)
+   - Российские производители стали
+   - Российские справочники и базы данных (splav.ru, metallicheckiy-portal.ru)
+3. Использовать поисковые запросы на русском языке
+4. Если марка не найдена по точному совпадению, НЕ ИЗОБРЕТАТЬ данные - вернуть "found": false
+
+ПРИМЕРЫ РОССИЙСКИХ ИСТОЧНИКОВ:
+- https://splav.kz/ (российская база данных сталей)
+- http://www.metallicheckiy-portal.ru/ (российские стандарты ГОСТ)
+- Официальные сайты российских заводов (Северсталь, ММК, НЛМК)
+
+"""
+
+        return f"""{cyrillic_instructions}Find detailed information about steel grade "{grade_name}".
 
 CRITICAL INSTRUCTIONS:
 1. Search multiple reliable sources (manufacturer websites, MatWeb, steelnumber.com, etc.)
@@ -673,6 +717,8 @@ Examples of CORRECT source_url (page/PDF with composition):
 ✓ "https://www.ssab.com/.../hardox-400-datasheet.pdf" (direct PDF with composition)
 ✓ "https://www.bohler-edelstahl.com/en/products/k888-matrix/" (product page with composition)
 ✓ "https://www.matweb.com/search/DataSheet.aspx?MatGUID=..." (database with composition)
+✓ "https://splav.kz/ru/..." (Russian steel database - EXCELLENT for GOST grades)
+✓ "http://www.metallicheckiy-portal.ru/..." (Russian metallurgy portal with GOST standards)
 
 Examples of WRONG source_url (no composition on these pages):
 ✗ "https://www.ssab.com/welding/hardox-400-consumables" (welding materials, not steel composition)
