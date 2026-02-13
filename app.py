@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import config
 from database_schema import get_connection
 from ai_search import get_ai_search
-from fuzzy_search import get_composition_matcher
+from fuzzy_search import get_composition_matcher, classify_steel, get_steel_groups
 from database.backup_manager import backup_before_modification
 
 # Load environment variables
@@ -206,6 +206,7 @@ def fuzzy_search_endpoint():
         # Get search parameters
         tolerance = float(data.get('tolerance_percent', 50.0))
         max_mismatched = int(data.get('max_mismatched_elements', 3))
+        smart_mode = data.get('smart_mode', False)  # Новый параметр для умного режима
 
         # Validate ranges
         if not (0 <= tolerance <= 100):
@@ -214,23 +215,41 @@ def fuzzy_search_endpoint():
         if not (0 <= max_mismatched <= 14):
             return jsonify({'error': 'max_mismatched_elements must be 0-14'}), 400
 
+        # Определяем группу стали для smart режима
+        steel_group_id = None
+        steel_group_name = None
+        if smart_mode:
+            steel_group_id = classify_steel(grade_data)
+            steel_groups = get_steel_groups()
+            if steel_group_id in steel_groups:
+                steel_group_name = steel_groups[steel_group_id].name_ru
+
         # Perform fuzzy search
         matcher = get_composition_matcher()
         results = matcher.find_similar_grades(
             reference_composition=grade_data,
             tolerance_percent=tolerance,
             max_mismatched_elements=max_mismatched,
-            exclude_grade=grade_data.get('grade')
+            exclude_grade=grade_data.get('grade'),
+            smart_mode=smart_mode
         )
 
-        return jsonify({
+        response = {
             'success': True,
             'reference_grade': grade_data.get('grade', 'Unknown'),
             'tolerance': tolerance,
             'max_mismatched_elements': max_mismatched,
+            'smart_mode': smart_mode,
             'found_count': len(results),
             'results': results
-        })
+        }
+
+        # Добавляем информацию о группе стали в smart режиме
+        if smart_mode and steel_group_id:
+            response['steel_group'] = steel_group_id
+            response['steel_group_name'] = steel_group_name
+
+        return jsonify(response)
 
     except ValueError as e:
         return jsonify({'success': False, 'error': f'Invalid parameter: {str(e)}'}), 400
@@ -261,12 +280,16 @@ def get_grades_list():
 
 @app.route('/api/steels/compare', methods=['POST'])
 def compare_grades_endpoint():
-    """Compare specific steel grades side-by-side"""
+    """Compare specific steel grades side-by-side (supports AI results)"""
     try:
         data = request.get_json() or {}
 
         reference_grade = data.get('reference_grade')
         compare_grades = data.get('compare_grades', [])
+
+        # НОВОЕ: Поддержка AI марок - полные данные могут быть переданы напрямую
+        reference_data_provided = data.get('reference_data')  # Для AI марок
+        compare_data_provided = data.get('compare_data', [])  # Для AI марок
 
         if not reference_grade:
             return jsonify({'error': 'reference_grade is required'}), 400
@@ -274,42 +297,64 @@ def compare_grades_endpoint():
         if not compare_grades or len(compare_grades) == 0:
             return jsonify({'error': 'compare_grades list is required'}), 400
 
-        # Get data from DB for all grades
+        # Get data from DB or use provided data (for AI grades)
         conn = get_connection()
         cursor = conn.cursor()
 
-        # Reference grade
-        cursor.execute("""
-            SELECT grade, c, cr, ni, mo, v, w, co, mn, si, cu, nb, n, s, p,
-                   standard, manufacturer, analogues, link, base, tech
-            FROM steel_grades
-            WHERE grade = ?
-        """, (reference_grade,))
-
-        ref_data = cursor.fetchone()
-        if not ref_data:
-            conn.close()
-            return jsonify({'error': f'Reference grade "{reference_grade}" not found'}), 404
-
         columns = ['grade', 'c', 'cr', 'ni', 'mo', 'v', 'w', 'co', 'mn', 'si',
                    'cu', 'nb', 'n', 's', 'p', 'standard', 'manufacturer',
-                   'analogues', 'link', 'base', 'tech']
+                   'analogues', 'link', 'base', 'tech', 'other']
 
-        ref_dict = dict(zip(columns, ref_data))
-
-        # Compare grades
-        results = []
-        for grade_name in compare_grades:
+        # Reference grade - проверяем сначала переданные данные, потом БД
+        if reference_data_provided:
+            # AI марка - используем переданные данные
+            ref_dict = {key: reference_data_provided.get(key) for key in columns}
+            print(f"[Compare] Using AI data for reference grade: {reference_grade}")
+        else:
+            # Обычная марка - ищем в БД
             cursor.execute("""
                 SELECT grade, c, cr, ni, mo, v, w, co, mn, si, cu, nb, n, s, p,
-                       standard, manufacturer, analogues, link, base, tech
+                       standard, manufacturer, analogues, link, base, tech, other
                 FROM steel_grades
                 WHERE grade = ?
-            """, (grade_name,))
+            """, (reference_grade,))
 
-            row = cursor.fetchone()
-            if row:
-                results.append(dict(zip(columns, row)))
+            ref_data = cursor.fetchone()
+            if not ref_data:
+                conn.close()
+                return jsonify({'error': f'Reference grade "{reference_grade}" not found'}), 404
+
+            ref_dict = dict(zip(columns, ref_data))
+
+        # Compare grades - проверяем AI данные и БД
+        results = []
+
+        # Создаем словарь AI марок для быстрого поиска
+        ai_grades_dict = {}
+        for ai_grade in compare_data_provided:
+            if ai_grade.get('grade'):
+                ai_grades_dict[ai_grade['grade']] = ai_grade
+
+        for grade_name in compare_grades:
+            # Сначала проверяем AI данные
+            if grade_name in ai_grades_dict:
+                ai_data = ai_grades_dict[grade_name]
+                grade_dict = {key: ai_data.get(key) for key in columns}
+                results.append(grade_dict)
+                print(f"[Compare] Using AI data for: {grade_name}")
+            else:
+                # Ищем в БД
+                cursor.execute("""
+                    SELECT grade, c, cr, ni, mo, v, w, co, mn, si, cu, nb, n, s, p,
+                           standard, manufacturer, analogues, link, base, tech, other
+                    FROM steel_grades
+                    WHERE grade = ?
+                """, (grade_name,))
+
+                row = cursor.fetchone()
+                if row:
+                    results.append(dict(zip(columns, row)))
+                    print(f"[Compare] Using DB data for: {grade_name}")
 
         conn.close()
 
@@ -322,6 +367,7 @@ def compare_grades_endpoint():
         })
 
     except Exception as e:
+        print(f"[Compare] Error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
