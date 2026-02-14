@@ -121,6 +121,24 @@ def get_steel_groups() -> Dict[str, SteelGroup]:
     return _STEEL_GROUPS_CACHE
 
 
+# Совместимые группы для smart-режима (минимальный набор)
+_COMPATIBLE_GROUPS = {
+    'CARBON_STEEL': {'CARBON_STEEL', 'ALLOY_STRUCTURAL', 'WEAR_RESISTANT'},
+    'ALLOY_STRUCTURAL': {'ALLOY_STRUCTURAL', 'CARBON_STEEL', 'WEAR_RESISTANT'},
+    'WEAR_RESISTANT': {'WEAR_RESISTANT', 'ALLOY_STRUCTURAL', 'CARBON_STEEL'},
+    'STAINLESS_AUSTENITIC': {'STAINLESS_AUSTENITIC', 'STAINLESS_DUPLEX'},
+    'STAINLESS_DUPLEX': {'STAINLESS_DUPLEX', 'STAINLESS_AUSTENITIC'},
+}
+
+
+def is_compatible_group(ref_group_id: Optional[str], candidate_group_id: Optional[str]) -> bool:
+    """Проверка совместимости групп в smart-режиме"""
+    if not ref_group_id or not candidate_group_id:
+        return True
+    allowed = _COMPATIBLE_GROUPS.get(ref_group_id, {ref_group_id})
+    return candidate_group_id in allowed
+
+
 def classify_steel(composition: Dict[str, Any]) -> str:
     """
     Определение типа стали по химическому составу
@@ -152,6 +170,10 @@ def classify_steel(composition: Dict[str, Any]) -> str:
     n = parse_val(composition.get('n'))
     si = parse_val(composition.get('si'))
 
+    # Если вообще нет данных — не классифицируем
+    if not any(v is not None for v in [c, cr, ni, mo, w, mn, v, co, n, si]):
+        return None
+
     # 1. Жаропрочные никелевые (Ni > 40%)
     if ni and ni > 40:
         return 'NICKEL_SUPERALLOY'
@@ -165,7 +187,13 @@ def classify_steel(composition: Dict[str, Any]) -> str:
         if (w and w > 5) or (mo and mo > 3 and (w is None or w < 2)):
             return 'HSS_HIGH_SPEED'
 
-    # 4. Холодноштамповые (C > 0.5%, Cr 5-15%)
+    # 4. Порошковые/высоколегированные инструментальные (M390/Elmax и аналоги)
+    # Отличие от нержавеющих: очень высокий C + высокий Cr + карбидообразователи
+    if c and c >= 1.0 and cr and cr >= 12:
+        if (v and v >= 1) or (mo and mo >= 1) or (w and w >= 1):
+            return 'COLD_WORK_TOOL'
+
+    # 5. Холодноштамповые (C > 0.5%, Cr 5-15%)
     # ВАЖНО: Проверяем ДО нержавеющих, т.к. инструментальные D2/1.2379 имеют Cr=12%
     # Отличие от нержавейки: высокий C (>0.5%) + наличие Mo/V
     if c and c > 0.5 and cr and 5 <= cr <= 15:
@@ -173,45 +201,47 @@ def classify_steel(composition: Dict[str, Any]) -> str:
         if mo or v or c > 1.0:
             return 'COLD_WORK_TOOL'
 
-    # 5. Нержавеющие (Cr > 10%)
+    # 6. Нержавеющие (Cr > 10%)
     if cr and cr > 10:
-        if cr > 18 and ni and 4 <= ni <= 8 and n and n > 0.1:
-            return 'STAINLESS_DUPLEX'
+        # Дуплексные: высокий Cr + умеренный Ni, N может отсутствовать в данных
+        if cr >= 20 and ni and 4 <= ni <= 8 and (c is None or c <= 0.08):
+            if n is None or n >= 0.05:
+                return 'STAINLESS_DUPLEX'
         if ni and ni > 7:
             return 'STAINLESS_AUSTENITIC'
         if c and c > 0.1:
             return 'STAINLESS_MARTENSITIC'
         return 'STAINLESS_FERRITIC'
 
-    # 6. Горячештамповые (C 0.25-0.55%, Cr 3-8%, Mo > 0.8%)
+    # 7. Горячештамповые (C 0.25-0.55%, Cr 3-8%, Mo > 0.8%)
     if c and 0.25 <= c <= 0.55 and cr and 3 <= cr <= 8:
         if mo and mo > 0.8:
             return 'HOT_WORK_TOOL'
 
-    # 7. Для пресс-форм
-    if c and 0.25 <= c <= 0.55:
-        if (cr and 1 <= cr <= 3 and ni and ni > 0.5) or (cr and cr > 12):
+    # 8. Для пресс-форм (P20/1.2311/1.2312 тип)
+    if c and 0.2 <= c <= 0.55:
+        if (cr and 1 <= cr <= 3) and (ni and ni > 0.5):
             return 'PLASTIC_MOLD'
 
-    # 8. Подшипниковые (C ~ 1%, Cr ~ 1.5%)
+    # 9. Подшипниковые (C ~ 1%, Cr ~ 1.5%)
     if c and 0.9 <= c <= 1.1 and cr and 1.3 <= cr <= 1.7:
         return 'BEARING_STEEL'
 
-    # 9. Пружинные (C 0.5-0.7%, Si > 1.5%)
+    # 10. Пружинные (C 0.5-0.7%, Si > 1.5%)
     if c and 0.5 <= c <= 0.7:
         if (si and si > 1.5) or (mn and mn > 0.8):
             return 'SPRING_STEEL'
 
-    # 10. Износостойкие (C 0.15-0.35%, Mn > 0.8%)
+    # 11. Износостойкие (C 0.15-0.35%, Mn > 0.8%)
     if c and 0.15 <= c <= 0.35 and mn and mn > 0.8:
         if cr is None or cr < 3:
             return 'WEAR_RESISTANT'
 
-    # 11. Конструкционные легированные
+    # 12. Конструкционные легированные
     if cr and cr > 0.5:
         return 'ALLOY_STRUCTURAL'
 
-    # 12. Углеродистые (по умолчанию)
+    # 13. Углеродистые (по умолчанию)
     return 'CARBON_STEEL'
 
 
@@ -231,6 +261,8 @@ class CompositionMatcher:
 
     # Обязательные элементы для сравнения
     REQUIRED_ELEMENTS = ['c']  # Хотя бы углерод должен быть
+    # Минимальное число сравнимых элементов для smart-режима
+    MIN_COMPARABLE_ELEMENTS = 3
 
     def __init__(self):
         """Инициализация matcher"""
@@ -448,14 +480,8 @@ class CompositionMatcher:
             ref_val = ref_values.get(element)
             cand_val = cand_values.get(element)
 
-            # Пропускаем если оба отсутствуют
-            if ref_val is None and cand_val is None:
-                continue
-
-            # ВАЖНО: Если у эталона нет данных по элементу, пропускаем
-            # Сравниваем только те элементы, которые присутствуют у эталона
-            # Это стандартная логика Fuzzy Search (мягкая фильтрация)
-            if ref_val is None:
+            # Сравниваем только элементы, присутствующие у ОБЕИХ марок
+            if ref_val is None or cand_val is None:
                 continue
 
             # Сравниваем элементы
@@ -469,6 +495,18 @@ class CompositionMatcher:
 
         return mismatched_count
 
+    def _get_allowed_mismatch_weight(self,
+                                     max_mismatched: int,
+                                     steel_group: SteelGroup) -> int:
+        """Максимальный вес элемента, который можно "простить" при заданном лимите"""
+        if max_mismatched <= 0:
+            return 0
+        weights = [steel_group.get_element_weight(e) for e in self.ELEMENTS]
+        weights.sort()
+        if max_mismatched >= len(weights):
+            return weights[-1]
+        return weights[max_mismatched - 1]
+
     def smart_count_mismatched(self,
                                ref_composition: Dict[str, Any],
                                candidate_composition: Dict[str, Any],
@@ -478,8 +516,10 @@ class CompositionMatcher:
         """
         Умный подсчет mismatched с учетом значимости элементов
 
-        Логика: max_mismatched "прощает" только МАЛОЗНАЧИМЫЕ элементы.
-        Если критичный элемент (вес >= 7) выходит за tolerance, марка отсеивается.
+        Логика:
+        1) Строгий лимит по количеству mismatched (<= max_mismatched)
+        2) Разрешены только несовпадения по элементам
+           с весом не выше порога, заданного max_mismatched
 
         Args:
             ref_composition: Эталонный состав
@@ -493,6 +533,7 @@ class CompositionMatcher:
         """
         mismatched_elements = []
         mismatched_weights = []  # (element, weight)
+        comparable_count = 0
 
         # Парсинг составов
         ref_values = {e: self.parse_element_value(ref_composition.get(e))
@@ -504,9 +545,11 @@ class CompositionMatcher:
             ref_val = ref_values.get(element)
             cand_val = cand_values.get(element)
 
-            # Пропускаем если оба отсутствуют или эталон отсутствует
-            if ref_val is None:
+            # Сравниваем только элементы, присутствующие у ОБЕИХ марок
+            if ref_val is None or cand_val is None:
                 continue
+
+            comparable_count += 1
 
             is_match, diff_percent = self.calculate_element_similarity(
                 ref_val, cand_val, tolerance_percent
@@ -519,32 +562,26 @@ class CompositionMatcher:
 
         total_mismatched = len(mismatched_elements)
 
+        # Недостаточно сравнимых элементов — считаем, что кандидат не проходит
+        if comparable_count < self.MIN_COMPARABLE_ELEMENTS:
+            return (False, total_mismatched, mismatched_elements)
+
         if total_mismatched == 0:
             return (True, 0, [])
 
-        # Сортируем по весу (от малозначимых к критичным)
-        mismatched_weights.sort(key=lambda x: x[1])
-
-        # Проверяем: можем ли "простить" все mismatched элементы?
-        if total_mismatched <= max_mismatched:
-            # Проверяем вес самого критичного из mismatched
-            max_weight = mismatched_weights[-1][1]
-            # Если даже самый критичный элемент имеет низкий вес (< 7), прощаем
-            if max_weight < 7:
-                return (True, total_mismatched, mismatched_elements)
-            # Если есть критичный элемент (вес >= 7), не проходит
+        # Строгий лимит по количеству mismatched
+        if total_mismatched > max_mismatched:
             return (False, total_mismatched, mismatched_elements)
 
-        # Если mismatched > max_mismatched:
-        # "Прощаем" max_mismatched самых малозначимых
-        forgiven = mismatched_weights[:max_mismatched]
-        remaining = mismatched_weights[max_mismatched:]
+        # Приоритетная логика: разрешены только элементы с весом
+        # не выше порога, заданного max_mismatched
+        allowed_max_weight = self._get_allowed_mismatch_weight(
+            max_mismatched, steel_group
+        )
+        mismatched_weights.sort(key=lambda x: x[1])
+        has_too_important = any(w > allowed_max_weight for _, w in mismatched_weights)
 
-        # Проверяем оставшиеся элементы
-        # Если среди них есть критичные (вес >= 6), не проходит
-        has_critical = any(w >= 6 for _, w in remaining)
-
-        return (not has_critical, total_mismatched, mismatched_elements)
+        return (not has_too_important, total_mismatched, mismatched_elements)
 
     def find_similar_grades(self,
                            reference_composition: Dict[str, Any],
@@ -598,15 +635,27 @@ class CompositionMatcher:
 
         rows = cursor.fetchall()
 
+        # Подготовка списка прямых аналогов (если есть)
+        analogues_set = set()
+        ref_analogues = reference_composition.get('analogues')
+        if ref_analogues:
+            if '|' in str(ref_analogues):
+                parts = str(ref_analogues).split('|')
+            else:
+                parts = str(ref_analogues).split()
+            analogues_set = {p.strip() for p in parts if p and p.strip()}
+
         # Определяем группу эталонной стали для smart режима
         ref_steel_group = None
         ref_steel_group_id = None
+        steel_groups = None
         if smart_mode:
-            ref_steel_group_id = classify_steel(reference_composition)
             steel_groups = get_steel_groups()
+            ref_steel_group_id = classify_steel(reference_composition)
             ref_steel_group = steel_groups.get(ref_steel_group_id)
             # Fallback на ALLOY_STRUCTURAL если группа не найдена
             if ref_steel_group is None:
+                ref_steel_group_id = 'ALLOY_STRUCTURAL'
                 ref_steel_group = steel_groups.get('ALLOY_STRUCTURAL',
                     _get_default_steel_groups()['ALLOY_STRUCTURAL'])
 
@@ -618,6 +667,16 @@ class CompositionMatcher:
             # Пропускаем исключенную марку (обычно саму эталонную)
             if exclude_grade and candidate['grade'] == exclude_grade:
                 continue
+
+            candidate_group_id = None
+            candidate_group_name = None
+            if smart_mode and steel_groups:
+                candidate_group_id = classify_steel(candidate)
+                if not is_compatible_group(ref_steel_group_id, candidate_group_id):
+                    continue
+                candidate_group = steel_groups.get(candidate_group_id)
+                if candidate_group:
+                    candidate_group_name = candidate_group.name_ru
 
             if smart_mode and ref_steel_group:
                 # SMART режим: учитываем значимость элементов
@@ -660,9 +719,8 @@ class CompositionMatcher:
             if similarity is None:
                 continue
 
-            # Исключаем прямые аналоги (практически идентичные марки)
-            # Прямые аналоги уже видны в столбце Analogues
-            if similarity >= 99.5:
+            # Исключаем прямые аналоги только если они явно указаны
+            if similarity >= 99.5 and candidate['grade'] in analogues_set:
                 continue
 
             # Добавляем в результаты
@@ -676,6 +734,8 @@ class CompositionMatcher:
             if smart_mode and ref_steel_group:
                 result_item['steel_group'] = ref_steel_group_id
                 result_item['steel_group_name'] = ref_steel_group.name_ru
+                result_item['candidate_steel_group'] = candidate_group_id
+                result_item['candidate_steel_group_name'] = candidate_group_name
 
             # Копируем все поля из candidate
             for key in columns:
@@ -684,8 +744,9 @@ class CompositionMatcher:
 
             results.append(result_item)
 
-        # Сортировка по похожести (от большего к меньшему)
-        results.sort(key=lambda x: x['similarity'], reverse=True)
+        # Сортировка по похожести (от большего к меньшему),
+        # затем по количеству mismatched (от меньшего к большему)
+        results.sort(key=lambda x: (-x['similarity'], x['mismatched_count']))
 
         # Возвращаем топ 100 результатов для производительности
         return results[:100]
@@ -719,6 +780,7 @@ class CompositionMatcher:
 
         total_weight = 0
         matched_weight = 0
+        comparable_count = 0
 
         for element in self.ELEMENTS:
             ref_val = ref_values.get(element)
@@ -727,6 +789,8 @@ class CompositionMatcher:
             # Пропускаем если хотя бы один отсутствует
             if ref_val is None or cand_val is None:
                 continue
+
+            comparable_count += 1
 
             # Получаем вес из группы стали
             weight = steel_group.get_element_weight(element)
@@ -743,6 +807,9 @@ class CompositionMatcher:
                 matched_weight += element_score
 
         if total_weight == 0:
+            return None
+
+        if comparable_count < self.MIN_COMPARABLE_ELEMENTS:
             return None
 
         return (matched_weight / total_weight) * 100
