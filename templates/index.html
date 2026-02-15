@@ -1030,7 +1030,8 @@
                         <input type="number" id="fuzzyMaxMismatched" value="3" min="0" max="14">
                     </div>
                     <div class="fuzzy-param description">
-                        <strong>Tolerance</strong> = максимальное отклонение каждого элемента (%). <strong>Max Mismatched</strong> = максимальное количество элементов с отклонением > tolerance. Например: tolerance 50%, max mismatched 2 → найдет марки, где максимум 2 элемента отличаются больше чем на 50%.
+                        <strong>Tolerance</strong> = максимальное отклонение каждого элемента (%).<br>
+                        <strong>Max Mismatched</strong> = кол-во элементов с отклонением &gt; tolerance (1-9: критичные защищены, 10: без защиты).
                     </div>
                     <button class="btn-search-similar" onclick="performFuzzySearch()">Search</button>
                 </div>
@@ -1505,7 +1506,8 @@
                 body: JSON.stringify({
                     grade_data: gradeData,
                     tolerance_percent: tolerance,
-                    max_mismatched_elements: maxMismatched
+                    max_mismatched_elements: maxMismatched,
+                    smart_mode: true  // Всегда используем умный режим с учетом критичности элементов
                 })
             })
             .then(response => response.json())

@@ -11,6 +11,7 @@ Fuzzy Search - Chemical Composition Similarity Matching
 import sqlite3
 import csv
 import os
+import re
 from typing import List, Dict, Optional, Any, Tuple
 from database_schema import get_connection
 
@@ -139,6 +140,73 @@ def is_compatible_group(ref_group_id: Optional[str], candidate_group_id: Optiona
     return candidate_group_id in allowed
 
 
+_NON_FERROUS_NAME_PATTERNS = [
+    # Latin symbol-based patterns
+    ('LEAD_ALLOY', re.compile(r'Pb', re.IGNORECASE)),
+    ('TIN_ALLOY', re.compile(r'Sn', re.IGNORECASE)),
+    ('ZINC_ALLOY', re.compile(r'Zn', re.IGNORECASE)),
+    # Copper-base variants (order matters)
+    ('COPPER_BRASS', re.compile(r'Cu\\s*Zn|CuZn', re.IGNORECASE)),
+    ('COPPER_BRONZE_TIN', re.compile(r'Cu\\s*Sn|CuSn', re.IGNORECASE)),
+    ('COPPER_BRONZE_AL', re.compile(r'Cu\\s*Al|CuAl', re.IGNORECASE)),
+    ('COPPER_NICKEL', re.compile(r'Cu\\s*Ni|CuNi', re.IGNORECASE)),
+    ('COPPER_PURE', re.compile(r'Cu', re.IGNORECASE)),
+    # Other bases
+    ('ALUMINUM_ALLOY', re.compile(r'\\bAl\\b|Al\\d|AlMg|AlSi|AlZn', re.IGNORECASE)),
+    ('MAGNESIUM_ALLOY', re.compile(r'Mg', re.IGNORECASE)),
+    ('TITANIUM_ALLOY', re.compile(r'Ti', re.IGNORECASE)),
+    ('NICKEL_ALLOY', re.compile(r'\\bNi\\b|Ni\\d', re.IGNORECASE)),
+    # Cyrillic patterns (Russian grade systems)
+    ('COPPER_BRASS', re.compile(r'^(ЛС|ЛЦ|ЛЖ|ЛК|ЛО|ЛН|ЛМ|ЛА)|^Л\\d', re.IGNORECASE)),
+    ('COPPER_BRONZE_AL', re.compile(r'^БРА', re.IGNORECASE)),
+    ('COPPER_BRONZE_TIN', re.compile(r'^БР', re.IGNORECASE)),
+    ('COPPER_NICKEL', re.compile(r'^МН', re.IGNORECASE)),
+    ('COPPER_PURE', re.compile(r'^М\\d', re.IGNORECASE)),
+    ('ALUMINUM_ALLOY', re.compile(r'^(АЛ|АК|АМГ|АМЦ|АД|Д|В)\\d', re.IGNORECASE)),
+    ('TITANIUM_ALLOY', re.compile(r'^ВТ', re.IGNORECASE)),
+    ('MAGNESIUM_ALLOY', re.compile(r'^МГ', re.IGNORECASE)),
+]
+
+
+def classify_non_ferrous_by_name(grade_name: Optional[str]) -> Optional[str]:
+    """Классификация цветных сплавов по названию марки (упрощенно)."""
+    if not grade_name:
+        return None
+    name = str(grade_name).strip()
+    if not name:
+        return None
+    for group_id, pattern in _NON_FERROUS_NAME_PATTERNS:
+        if pattern.search(name):
+            # Pb + Sn чаще всего припой/свинцово-оловянный
+            if group_id == 'TIN_ALLOY' and re.search(r'Pb', name, re.IGNORECASE):
+                return 'LEAD_ALLOY'
+            return group_id
+    return None
+
+
+def classify_non_ferrous_by_composition(cu: Optional[float],
+                                        ni: Optional[float],
+                                        c: Optional[float],
+                                        cr: Optional[float],
+                                        mo: Optional[float],
+                                        v: Optional[float],
+                                        w: Optional[float],
+                                        co: Optional[float],
+                                        mn: Optional[float],
+                                        si: Optional[float],
+                                        n: Optional[float]) -> Optional[str]:
+    """Классификация цветных по составу (если есть только Cu/Ni)."""
+    # Если есть Cu и почти нет "стальных" элементов — считаем медным
+    steel_like = any(val is not None for val in [c, cr, mo, v, w, co, mn, si, n])
+    if cu is None:
+        return None
+    if not steel_like:
+        if ni is not None:
+            return 'COPPER_NICKEL'
+        return 'COPPER_PURE'
+    return None
+
+
 def classify_steel(composition: Dict[str, Any]) -> str:
     """
     Определение типа стали по химическому составу
@@ -169,9 +237,10 @@ def classify_steel(composition: Dict[str, Any]) -> str:
     co = parse_val(composition.get('co'))
     n = parse_val(composition.get('n'))
     si = parse_val(composition.get('si'))
+    cu = parse_val(composition.get('cu'))
 
     # Если вообще нет данных — не классифицируем
-    if not any(v is not None for v in [c, cr, ni, mo, w, mn, v, co, n, si]):
+    if not any(v is not None for v in [c, cr, ni, mo, w, mn, v, co, n, si, cu]):
         return None
 
     # 1. Жаропрочные никелевые (Ni > 40%)
@@ -241,8 +310,21 @@ def classify_steel(composition: Dict[str, Any]) -> str:
     if cr and cr > 0.5:
         return 'ALLOY_STRUCTURAL'
 
-    # 13. Углеродистые (по умолчанию)
-    return 'CARBON_STEEL'
+    # Цветные сплавы (упрощенная классификация по названию/составу)
+    non_ferrous = classify_non_ferrous_by_name(composition.get('grade'))
+    if non_ferrous:
+        return non_ferrous
+    non_ferrous = classify_non_ferrous_by_composition(
+        cu=cu, ni=ni, c=c, cr=cr, mo=mo, v=v, w=w, co=co, mn=mn, si=si, n=n
+    )
+    if non_ferrous:
+        return non_ferrous
+
+    # 13. Углеродистые (по умолчанию для стали)
+    steel_like = any(val is not None for val in [c, cr, ni, mo, w, mn, v, co, n, si])
+    if steel_like:
+        return 'CARBON_STEEL'
+    return None
 
 
 class CompositionMatcher:
@@ -507,33 +589,41 @@ class CompositionMatcher:
             return weights[-1]
         return weights[max_mismatched - 1]
 
+    # Порог веса для критичных элементов (вес >= CRITICAL_WEIGHT не прощается)
+    CRITICAL_WEIGHT_THRESHOLD = 8
+
     def smart_count_mismatched(self,
                                ref_composition: Dict[str, Any],
                                candidate_composition: Dict[str, Any],
                                tolerance_percent: float,
                                max_mismatched: int,
-                               steel_group: SteelGroup) -> Tuple[bool, int, List[str]]:
+                               steel_group: SteelGroup,
+                               protect_critical: bool = True) -> Tuple[bool, int, List[str], float]:
         """
         Умный подсчет mismatched с учетом значимости элементов
 
         Логика:
-        1) Строгий лимит по количеству mismatched (<= max_mismatched)
-        2) Разрешены только несовпадения по элементам
-           с весом не выше порога, заданного max_mismatched
+        1) Подсчёт mismatched элементов
+        2) Защита критичных элементов (вес >= 8): если protect_critical=True,
+           критичные элементы НЕ прощаются (кроме случая max_mismatched >= 10)
+        3) Фильтр по количеству: total_mismatched <= max_mismatched
+        4) Расчёт "штрафа" для сортировки результатов
 
         Args:
             ref_composition: Эталонный состав
             candidate_composition: Состав кандидата
             tolerance_percent: Допустимое отклонение (%)
-            max_mismatched: Сколько малозначимых элементов можно "простить"
+            max_mismatched: Максимальное количество mismatched элементов
             steel_group: Группа стали с весами элементов
+            protect_critical: Защищать критичные элементы (по умолчанию True)
 
         Returns:
-            (passes_filter: bool, mismatched_count: int, mismatched_elements: List[str])
+            (passes_filter: bool, mismatched_count: int, mismatched_elements: List[str], penalty_score: float)
         """
         mismatched_elements = []
-        mismatched_weights = []  # (element, weight)
+        mismatched_weights = []  # (element, weight, diff_percent)
         comparable_count = 0
+        critical_mismatched = 0  # Количество критичных элементов с отклонением
 
         # Парсинг составов
         ref_values = {e: self.parse_element_value(ref_composition.get(e))
@@ -558,30 +648,32 @@ class CompositionMatcher:
             if not is_match:
                 weight = steel_group.get_element_weight(element)
                 mismatched_elements.append(element)
-                mismatched_weights.append((element, weight))
+                mismatched_weights.append((element, weight, diff_percent))
+                if weight >= self.CRITICAL_WEIGHT_THRESHOLD:
+                    critical_mismatched += 1
 
         total_mismatched = len(mismatched_elements)
 
-        # Недостаточно сравнимых элементов — считаем, что кандидат не проходит
+        # Недостаточно сравнимых элементов
         if comparable_count < self.MIN_COMPARABLE_ELEMENTS:
-            return (False, total_mismatched, mismatched_elements)
+            return (False, total_mismatched, mismatched_elements, 999.0)
 
         if total_mismatched == 0:
-            return (True, 0, [])
+            return (True, 0, [], 0.0)
 
-        # Строгий лимит по количеству mismatched
+        # Защита критичных элементов (вес >= 8)
+        # Если есть mismatched критичные элементы И max_mismatched < 10, отклоняем
+        if protect_critical and critical_mismatched > 0 and max_mismatched < 10:
+            return (False, total_mismatched, mismatched_elements, 999.0)
+
+        # Фильтр по количеству
         if total_mismatched > max_mismatched:
-            return (False, total_mismatched, mismatched_elements)
+            return (False, total_mismatched, mismatched_elements, 999.0)
 
-        # Приоритетная логика: разрешены только элементы с весом
-        # не выше порога, заданного max_mismatched
-        allowed_max_weight = self._get_allowed_mismatch_weight(
-            max_mismatched, steel_group
-        )
-        mismatched_weights.sort(key=lambda x: x[1])
-        has_too_important = any(w > allowed_max_weight for _, w in mismatched_weights)
+        # Расчёт штрафа: сумма (вес * отклонение) для mismatched элементов
+        penalty_score = sum(w * (d / 100.0) for _, w, d in mismatched_weights)
 
-        return (not has_too_important, total_mismatched, mismatched_elements)
+        return (True, total_mismatched, mismatched_elements, penalty_score)
 
     def find_similar_grades(self,
                            reference_composition: Dict[str, Any],
@@ -678,9 +770,10 @@ class CompositionMatcher:
                 if candidate_group:
                     candidate_group_name = candidate_group.name_ru
 
+            penalty_score = 0.0
             if smart_mode and ref_steel_group:
                 # SMART режим: учитываем значимость элементов
-                passes, mismatched_count, mismatched_elems = self.smart_count_mismatched(
+                passes, mismatched_count, mismatched_elems, penalty_score = self.smart_count_mismatched(
                     reference_composition,
                     candidate,
                     tolerance_percent,
@@ -728,6 +821,7 @@ class CompositionMatcher:
                 'grade': candidate['grade'],
                 'similarity': round(similarity, 1),
                 'mismatched_count': mismatched_count,
+                'penalty_score': round(penalty_score, 2),  # Штраф за критичные mismatched
             }
 
             # Добавляем информацию о группе стали в smart режиме
@@ -744,9 +838,11 @@ class CompositionMatcher:
 
             results.append(result_item)
 
-        # Сортировка по похожести (от большего к меньшему),
-        # затем по количеству mismatched (от меньшего к большему)
-        results.sort(key=lambda x: (-x['similarity'], x['mismatched_count']))
+        # Сортировка:
+        # 1) По похожести (от большего к меньшему)
+        # 2) По штрафу за критичные элементы (от меньшего к большему)
+        # 3) По количеству mismatched (от меньшего к большему)
+        results.sort(key=lambda x: (-x['similarity'], x['penalty_score'], x['mismatched_count']))
 
         # Возвращаем топ 100 результатов для производительности
         return results[:100]

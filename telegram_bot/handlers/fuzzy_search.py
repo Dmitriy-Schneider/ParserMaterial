@@ -133,7 +133,8 @@ async def perform_fuzzy_search(update: Update, grade_name: str, tolerance: float
             json={
                 'grade_data': grade_data,
                 'tolerance_percent': tolerance,
-                'max_mismatched_elements': max_mismatched
+                'max_mismatched_elements': max_mismatched,
+                'smart_mode': True  # Умный режим с учетом критичности элементов
             },
             timeout=30
         )
