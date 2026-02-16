@@ -1,5 +1,0 @@
-Total grades: 9747
-With analogues: 6919
-Size: 9.83 MB
-Timestamp: 20260124_160400
-Reason: remove_no_link_records

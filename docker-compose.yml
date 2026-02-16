@@ -16,6 +16,8 @@ services:
       - ./templates:/app/templates
       - ./ai_search.py:/app/ai_search.py
       - ./fuzzy_search.py:/app/fuzzy_search.py
+      # Конфигурация весов элементов для Smart Fuzzy Search
+      - ./config:/app/config
     env_file:
       - .env
     environment:

@@ -1,0 +1,5 @@
+Total grades: 9614
+With analogues: 6795
+Size: 9.83 MB
+Timestamp: 20260125_010001
+Reason: fix_remaining_analogues

@@ -60,7 +60,8 @@
       "Bash(docker start:*)",
       "Bash(docker inspect:*)",
       "Bash(docker system:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(tree:*)"
     ]
   }
 }
