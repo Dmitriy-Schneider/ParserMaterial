@@ -76,3 +76,59 @@ nul
 temp/
 tmp/
 tmpclaude-*
+
+# Data files (not for public repo)
+data/
+*.gz
+*.pdf
+*.xlsx
+
+# Logs
+logs/
+
+# Reports (internal)
+reports/
+
+# Parsers and utilities (internal tools)
+parsers/
+importers/
+utils/
+migrations/
+tests/
+
+# Internal scripts
+parser.py
+*_sync.py
+run_*.py
+sync_*.py
+zknives_*.py
+add_*.py
+update_*.py
+fix_*.py
+check_*.py
+validate_*.py
+cleanup_*.py
+remove_*.py
+analyze_*.py
+
+# Batch files
+*.bat
+
+# CSV data files (Cyrillic)
+*.csv
+!config/element_weights.csv
+
+# Claude settings
+.claude/
+
+# Database backups
+database/backups/
+
+# Logo files (internal)
+HPM_logo*
+
+# Internal documentation
+*.md
+!README.md
+!docs/DEPLOYMENT_GUIDE.md
+!telegram_bot/README.md
