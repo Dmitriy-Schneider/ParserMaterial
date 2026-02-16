@@ -61,7 +61,8 @@
       "Bash(docker inspect:*)",
       "Bash(docker system:*)",
       "Bash(git restore:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(powershell -Command:*)"
     ]
   }
 }
